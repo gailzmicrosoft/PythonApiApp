@@ -1,0 +1,17 @@
+# Python requirements for the project
+# pip install -r requirements.txt
+# added below package for xlsx file support
+# py -m pip install openpyxl   
+azure-identity
+urllib3
+psycopg2-binary
+pandas
+openpyxl
+
+
+
+
+
+
+
+
