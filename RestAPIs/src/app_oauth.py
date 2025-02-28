@@ -1,7 +1,9 @@
 # filepath: /C:/Repos/PythonApiApp/RestAPIs/src/app_oauth.py
 import os
-from flask import Flask, request, jsonify, redirect, url_for
+from flask import Flask, request, jsonify, redirect, url_for, session
 from authlib.integrations.flask_client import OAuth
+from functools import wraps
+from check_orders import check_orders  # Import the check_orders function
 
 app = Flask(__name__)
 app.secret_key = 'random_secret_key'
@@ -21,6 +23,14 @@ oauth.register(
     client_kwargs={'scope': 'openid profile email'}
 )
 
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 @app.route('/')
 def hello():
     return 'Hello, World!'
@@ -34,7 +44,13 @@ def login():
 def auth():
     token = oauth.microsoft.authorize_access_token()
     user_info = oauth.microsoft.parse_id_token(token)
-    return jsonify(user_info)
+    session['user'] = user_info
+    return redirect(url_for('hello'))
+
+@app.route('/check_orders', methods=['GET'])
+@login_required
+def check_orders_route():
+    return check_orders()
 
 if __name__ == '__main__':
     app.run(port=8080)

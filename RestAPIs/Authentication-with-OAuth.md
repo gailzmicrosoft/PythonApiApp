@@ -24,6 +24,11 @@
    $Env:MICROSOFT_CLIENT_ID="your-microsoft-client-id"
    $Env:MICROSOFT_CLIENT_SECRET="your-microsoft-client-secret"
 
+   verify the environment variables are set: 
+
+   echo $Env:MICROSOFT_CLIENT_ID
+   echo $Env:MICROSOFT_CLIENT_SECRET
+
    **On macOS/Linux:**
 
    export MICROSOFT_CLIENT_ID="your-microsoft-client-id"
