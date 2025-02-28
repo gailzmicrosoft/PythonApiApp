@@ -1,7 +1,6 @@
-# ...existing code...
 import os
 from flask import Flask, request, jsonify
-from check_orders import check_orders  # Import the check_orders function
+from functools import wraps
 
 app = Flask(__name__)
 
@@ -14,24 +13,26 @@ app = Flask(__name__)
 #SECRET_API_KEY = os.environ.get("SERVER_API_KEY").strip()
 
 # just for testing 
-SECRET_API_KEY ="TestKey"
+SECRET_API_KEY = "TestKey"
 
 #curl -H "x-api-key:TestKey" http://localhost:8080/
 
-
 print(f"Server Side Key set to: {SECRET_API_KEY}")  # Debugging line
 
-@app.before_request
-def require_api_key():
-    api_key = request.headers.get("x-api-key")
-    print(f"Received API key: {api_key}")  # Debugging line
-    if not api_key:
-        return jsonify({"error": "API key missing"}), 401
-    if api_key != SECRET_API_KEY:
-        return jsonify({"error": "Invalid API key"}), 403
-    
+def require_api_key(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        api_key = request.headers.get("x-api-key")
+        print(f"Received API key: {api_key}")  # Debugging line
+        if not api_key:
+            return jsonify({"error": "API key missing"}), 401
+        if api_key != SECRET_API_KEY:
+            return jsonify({"error": "Invalid API key"}), 403
+        return f(*args, **kwargs)
+    return decorated_function
 
 @app.route("/check_orders", methods=["GET"])
+@require_api_key
 def check_orders():
     first_name = request.args.get("first_name")
     last_name = request.args.get("last_name")
@@ -50,11 +51,5 @@ def check_orders():
 def hello():
     return "Hello, World!"
 
-
-@app.route("/check_orders", methods=["GET"])
-def check_orders_route():
-    return check_orders()
-
 if __name__ == "__main__":
-    app.run(port=8080)
-# ...existing code...
+    app.run(host='0.0.0.0', port=8080)
