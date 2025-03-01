@@ -92,13 +92,13 @@ resource containerAppEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
       destination: 'log-analytics'
       logAnalyticsConfiguration: {
         customerId: logAnalyticsWorkspace.properties.customerId
-        sharedKey: listKeys(logAnalyticsWorkspace.id, '2021-06-01').primarySharedKey
+        sharedKey: listKeys(logAnalyticsWorkspace.id, '2024-03-01').primarySharedKey
       }
     }
   }
 }
 
-resource containerApp 'Microsoft.App/containerApps@2021-03-01' = {
+resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: containerAppName
   location: location
   properties: {
@@ -118,7 +118,7 @@ resource containerApp 'Microsoft.App/containerApps@2021-03-01' = {
       secrets: [
         {
           name: 'acrPassword'
-          value: listCredentials(containerRegistry.id, '2021-06-01-preview').passwords[0].value
+          value: listCredentials(containerRegistry.id, '2024-03-01').passwords[0].value
         }
       ]
     }
@@ -136,3 +136,60 @@ resource containerApp 'Microsoft.App/containerApps@2021-03-01' = {
     }
   }
 }
+
+
+/**************************************************************************/
+// Create azure database for postgresql and database user
+/**************************************************************************/
+resource postgresqlServer 'Microsoft.DBforPostgreSQL/servers@2017-12-01' = {
+  name: '${resourcePrefix}pgserver'
+  location: location
+  properties: {
+    createMode: 'Default'
+    administratorLogin: 'adminuser'
+    administratorLoginPassword: 'P@ssw0rd1234!'
+    sslEnforcement: 'Enabled'
+    storageProfile: {
+      storageMB: 5120
+      backupRetentionDays: 7
+      geoRedundantBackup: 'Disabled'
+    }
+    version: '11'
+  }
+}
+// create a database in the postgresql server
+resource postgresqlDatabase 'Microsoft.DBforPostgreSQL/servers/databases@2017-12-01' = {
+  parent: postgresqlServer
+  name: 'chatbotdbr'
+  properties: {
+    charset: 'UTF8'
+    collation: 'English_United States.1252'
+  }
+}
+
+
+// create a firewall rule to allow access to the postgresql server from the container app
+resource postgresqlFirewallRule 'Microsoft.DBforPostgreSQL/servers/firewallRules@2017-12-01' = {
+  parent: postgresqlServer
+  name: 'AllowContainerApp'
+  properties: {
+    startIpAddress: '0.0.0.0'
+    endIpAddress: '255.255.255.255'
+  }
+  dependsOn: [
+    containerApp
+  ]
+}
+// create a database user in the postgresql server
+resource postgresqlUser 'Microsoft.DBforPostgreSQL/servers/databases/users@2017-12-01' = {
+  parent: postgresqlDatabase
+  name: 'chatbotdbuser'
+  properties: {
+    password: 'P@ssw0rd1234!'
+    roles: [
+      'db_datareader','db_datawriter'
+    ]
+  }
+}
+
+
