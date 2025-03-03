@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.33.93.31351",
-      "templateHash": "5773133196613035346"
+      "templateHash": "1632539275806827176"
     }
   },
   "parameters": {
@@ -18,7 +18,7 @@
     },
     "postgreSqlServerAdminUser": {
       "type": "string",
-      "defaultValue": "postgresql_admin",
+      "defaultValue": "chatbot_admin",
       "metadata": {
         "description": "Postgresql Server Admin User Name"
       }
@@ -31,7 +31,7 @@
     },
     "dbUserName": {
       "type": "string",
-      "defaultValue": "postgresql_db_user",
+      "defaultValue": "chatbot_user",
       "metadata": {
         "description": "Postgresql Database - chatbotdb - User Name"
       }

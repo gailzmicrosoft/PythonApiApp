@@ -6,7 +6,7 @@
 param resourcePrefixUser string = 'pycta'
 
 @description('Postgresql Server Admin User Name')
-param postgreSqlServerAdminUser string = 'postgresql_admin'
+param postgreSqlServerAdminUser string = 'chatbot_admin'
 
 @description('Postgresql Server Admin Password.')
 @secure()
@@ -14,7 +14,7 @@ param postgreSqlServerAdminPassword string
 
 var databaseName = 'chatbotdb'
 @description('Postgresql Database - chatbotdb - User Name')
-param dbUserName string = 'postgresql_db_user'
+param dbUserName string = 'chatbot_user'
 
 @description('Postgresql Database - chatbotdb - User Password.')
 @secure()
