@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.33.93.31351",
-      "templateHash": "16489913974109749140"
+      "templateHash": "15936122882234913599"
     }
   },
   "parameters": {
@@ -120,7 +120,7 @@
       "name": "[format('{0}pgserver', variables('resourcePrefix'))]",
       "location": "[variables('location')]",
       "sku": {
-        "name": "B8ms",
+        "name": "Standard_B8ms",
         "tier": "Burstable"
       },
       "properties": {
@@ -233,10 +233,15 @@
       "location": "[variables('location')]",
       "properties": {
         "sku": {
-          "name": "Standard"
+          "name": "PerGB2018"
         },
         "defaultDataCollectionRuleResourceId": "string",
-        "retentionInDays": 5
+        "retentionInDays": 30,
+        "features": {
+          "legacy": 0,
+          "searchVersion": 1,
+          "enableLogAccessUsingOnlyResourcePermissions": true
+        }
       }
     },
     {

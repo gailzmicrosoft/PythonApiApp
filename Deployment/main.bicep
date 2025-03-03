@@ -103,7 +103,7 @@ resource postgresqlServer 'Microsoft.DBforPostgreSQL/flexibleServers@2022-12-01'
   name: '${resourcePrefix}pgserver'
   location: location
   sku: {
-    name: 'B8ms' // available SKUs: B1ms, B2ms, B4ms, B8ms, B16ms
+    name: 'Standard_B8ms' // available SKUs: B1ms, B2ms, B4ms, B8ms, B16ms
     tier: 'Burstable'
   }
   properties: {
@@ -200,10 +200,15 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10
   location: location
   properties: {
     sku: {
-      name: 'Standard'
+      name: 'PerGB2018'
     }
     defaultDataCollectionRuleResourceId: 'string'
-    retentionInDays: 5
+    retentionInDays: 30
+    features: {
+      legacy: 0
+      searchVersion: 1
+      enableLogAccessUsingOnlyResourcePermissions: true
+    }
   }
 }
 
