@@ -198,16 +198,13 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2022-12-01' =
 resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   name: logAnalyticsWorkspaceName
   location: location
+  tags: {
+    displayName: 'Log Analytics Workspace'
+  }
   properties: {
+    retentionInDays: 30
     sku: {
       name: 'PerGB2018'
-    }
-    defaultDataCollectionRuleResourceId: 'string'
-    retentionInDays: 30
-    features: {
-      legacy: 0
-      searchVersion: 1
-      enableLogAccessUsingOnlyResourcePermissions: true
     }
   }
 }
