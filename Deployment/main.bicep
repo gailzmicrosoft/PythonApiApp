@@ -9,7 +9,7 @@ var resourcePrefix = '${trimmedResourcePrefixUser}${uniString}'
 
 
 var location = resourceGroup().location
-var resourceGroupName = resourceGroup().name
+//var resourceGroupName = resourceGroup().name
 var containerRegistryName = '${resourcePrefix}acr'
 var containerAppEnvName = '${resourcePrefix}env'
 var containerAppName = '${resourcePrefix}app'
@@ -17,6 +17,30 @@ var logAnalyticsWorkspaceName = '${resourcePrefix}law'
 var storageAccountNameStarter = '${resourcePrefix}storage'
 var storageAccountName = toLower(replace(storageAccountNameStarter, '-', ''))
 
+
+
+/**************************************************************************/
+// Create a Key Vault and store the API key in it
+/**************************************************************************/
+resource keyVault 'Microsoft.KeyVault/vaults@2022-11-01' = {
+  name: '${resourcePrefix}KeyVault'
+  location: location
+  properties: {
+    sku: {
+      family: 'A'
+      name: 'standard'
+    }
+    tenantId: subscription().tenantId
+    accessPolicies: []
+  }
+}
+resource kvsApiKey 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: 'x-api-key'
+  properties: {
+    value:'ChatbotApiKey'
+  }
+}
 
 
 /**************************************************************************/
@@ -39,12 +63,11 @@ resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01'
 // create a container named mortgageapp in the storage account
 resource blobContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
   parent: blobService
-  name: 'mortgageapp'
+  name: 'chatbotappdata'
   properties: {
     publicAccess: 'None'
   }
 }
-
 
 
 /**************************************************************************/
@@ -79,8 +102,6 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-06
 }
 
 
-
-
 /**************************************************************************/
 // Create container app environment and container app
 /**************************************************************************/
@@ -98,6 +119,23 @@ resource containerAppEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
   }
 }
 
+var containerAppUserName = 'acr-username' // Update the username to comply with naming rules
+var containerAppPassword = 'acr-password' // Update the password to comply with naming rules
+resource kvsContainerAppUserName 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: containerAppUserName
+  properties: {
+    value: containerAppUserName
+  }
+}
+resource kvsContainerAppPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: containerAppPassword
+  properties: {
+    value: containerAppPassword
+  }
+}
+
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: containerAppName
   location: location
@@ -111,13 +149,13 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
       registries: [
         {
           server: '${containerRegistryName}.azurecr.io'
-          username: containerRegistry.properties.adminUser.username
-          passwordSecretRef: 'acrPassword'
+          username: containerAppUserName 
+          passwordSecretRef: 'acr-password' 
         }
       ]
       secrets: [
         {
-          name: 'acrPassword'
+          name: 'acr-password'
           value: listCredentials(containerRegistry.id, '2024-03-01').passwords[0].value
         }
       ]
@@ -129,7 +167,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           image: '${containerRegistryName}.azurecr.io/pythonapiapp:v1'
           resources: {
             cpu: 1
-            memory: '1.0Gi'
+            memory: '2.0Gi'
           }
         }
       ]
@@ -140,36 +178,50 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
 
 /**************************************************************************/
 // Create azure database for postgresql and database user
+// and store the credentials in key vault
 /**************************************************************************/
-resource postgresqlServer 'Microsoft.DBforPostgreSQL/servers@2017-12-01' = {
+//
+resource postgresqlServer 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
   name: '${resourcePrefix}pgserver'
   location: location
   properties: {
     createMode: 'Default'
     administratorLogin: 'adminuser'
-    administratorLoginPassword: 'P@ssw0rd1234!'
-    sslEnforcement: 'Enabled'
-    storageProfile: {
-      storageMB: 5120
-      backupRetentionDays: 7
-      geoRedundantBackup: 'Disabled'
-    }
+    administratorLoginPassword: 'P@ssw0rd12345!_to_be_changed_admin'
     version: '11'
+    highAvailability: {
+      mode: 'Disabled'
+    }
   }
 }
+resource kvsPostgreSqlserverAdminUser 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: 'postgresql_admin'
+  properties: {
+    value:postgresqlServer.properties.administratorLogin
+  }
+}
+
+resource kvsPostgreSqlserverAdminPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: 'postgresql_admin_password'
+  properties: {
+    value: postgresqlServer.properties.administratorLoginPassword
+  }
+}
+
 // create a database in the postgresql server
-resource postgresqlDatabase 'Microsoft.DBforPostgreSQL/servers/databases@2017-12-01' = {
+resource postgresqlDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-01' = {
   parent: postgresqlServer
-  name: 'chatbotdbr'
+  name: 'chatbotdb'
   properties: {
     charset: 'UTF8'
     collation: 'English_United States.1252'
   }
 }
 
-
 // create a firewall rule to allow access to the postgresql server from the container app
-resource postgresqlFirewallRule 'Microsoft.DBforPostgreSQL/servers/firewallRules@2017-12-01' = {
+resource postgresqlFirewallRule 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-08-01' = {
   parent: postgresqlServer
   name: 'AllowContainerApp'
   properties: {
@@ -180,16 +232,48 @@ resource postgresqlFirewallRule 'Microsoft.DBforPostgreSQL/servers/firewallRules
     containerApp
   ]
 }
-// create a database user in the postgresql server
-resource postgresqlUser 'Microsoft.DBforPostgreSQL/servers/databases/users@2017-12-01' = {
-  parent: postgresqlDatabase
+
+/**************************************************************************/
+// Create database user in the postgresql server
+// and store the credentials in key vault
+/**************************************************************************/
+var dbUserName = 'chatdbuser'
+var dbUserPassword = 'P@ssw0rd12345!_to_be_changed_dbuser'
+var dbName = postgresqlDatabase.name
+resource postgresqlUser 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2024-08-01' = {
+  parent: postgresqlServer
   name: 'chatbotdbuser'
   properties: {
-    password: 'P@ssw0rd1234!'
-    roles: [
-      'db_datareader','db_datawriter'
-    ]
+    value: 'CREATE USER ${dbUserName} WITH PASSWORD \'${dbUserPassword}\'; GRANT ALL PRIVILEGES ON DATABASE ${dbName} TO ${dbUserName};'
+  }
+}
+resource kvsPostgreSqlDbUser 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: 'postgresql_db_user_name'
+  properties: {
+    value:dbUserName
+  }
+}
+resource kvsPostgreSqlDbUserPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: 'postgresql_db_user_password'
+  properties: {
+    value: dbUserPassword
   }
 }
 
+/**************************************************************************/
+// Assign container app the role of blob data contributor to the storage account
+/**************************************************************************/
+resource containerAppIdentity 'Microsoft.App/containerApps@2024-03-01' existing = {
+  name: containerAppName
+}
 
+// assign the role of blob data contributor to the container app
+resource blobDataContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = {
+  name: guid(resourceGroup().id, containerAppIdentity.id, 'BlobDataContributor')
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382b6b1f')
+    principalId: containerAppIdentity.identity.principalId
+  }
+}

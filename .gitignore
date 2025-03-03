@@ -6,6 +6,7 @@ notes/
 __pycache__/
 *.py[cod]
 *$py.class
+.vs/
 
 # C extensions
 *.so
