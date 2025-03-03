@@ -73,7 +73,7 @@ resource blobContainer 'Microsoft.Storage/storageAccounts/blobServices/container
 /**************************************************************************/
 // Create container registry and log analytics workspace
 /**************************************************************************/
-resource containerRegistry 'Microsoft.ContainerRegistry/registries@2021-06-01-preview' = {
+resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: containerRegistryName
   location: location
   sku: {
@@ -84,7 +84,7 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2021-06-01-pr
   }
 }
 
-resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-06-01' = {
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: logAnalyticsWorkspaceName
   location: location
   sku: {
@@ -105,7 +105,7 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-06
 /**************************************************************************/
 // Create container app environment and container app
 /**************************************************************************/
-resource containerAppEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
+resource containerAppEnv 'Microsoft.App/managedEnvironments@2023-05-01' = {
   name: containerAppEnvName
   location: location
   properties: {
@@ -113,7 +113,7 @@ resource containerAppEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
       destination: 'log-analytics'
       logAnalyticsConfiguration: {
         customerId: logAnalyticsWorkspace.properties.customerId
-        sharedKey: listKeys(logAnalyticsWorkspace.id, '2024-03-01').primarySharedKey
+        sharedKey: listKeys(logAnalyticsWorkspace.id, '2023-05-01').primarySharedKey
       }
     }
   }
@@ -136,7 +136,7 @@ resource kvsContainerAppPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-01' 
   }
 }
 
-resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
+resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
   name: containerAppName
   location: location
   properties: {
@@ -156,7 +156,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
       secrets: [
         {
           name: 'acr-password'
-          value: listCredentials(containerRegistry.id, '2024-03-01').passwords[0].value
+          value: listCredentials(containerRegistry.id, '2023-05-01').passwords[0].value
         }
       ]
     }
@@ -180,10 +180,14 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
 // Create azure database for postgresql and database user
 // and store the credentials in key vault
 /**************************************************************************/
-//
-resource postgresqlServer 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
+// pycta6gfb6pgserver
+resource postgresqlServer 'Microsoft.DBforPostgreSQL/flexibleServers@2022-12-01' = {
   name: '${resourcePrefix}pgserver'
   location: location
+  sku: {
+    name: 'Standard_D2s_v3'
+    tier: 'Burstable'
+  }
   properties: {
     createMode: 'Default'
     administratorLogin: 'adminuser'
@@ -211,7 +215,7 @@ resource kvsPostgreSqlserverAdminPassword 'Microsoft.KeyVault/vaults/secrets@202
 }
 
 // create a database in the postgresql server
-resource postgresqlDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-01' = {
+resource postgresqlDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2022-12-01' = {
   parent: postgresqlServer
   name: 'chatbotdb'
   properties: {
@@ -221,7 +225,7 @@ resource postgresqlDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases
 }
 
 // create a firewall rule to allow access to the postgresql server from the container app
-resource postgresqlFirewallRule 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-08-01' = {
+resource postgresqlFirewallRule 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2022-12-01' = {
   parent: postgresqlServer
   name: 'AllowContainerApp'
   properties: {
@@ -240,7 +244,7 @@ resource postgresqlFirewallRule 'Microsoft.DBforPostgreSQL/flexibleServers/firew
 var dbUserName = 'chatdbuser'
 var dbUserPassword = 'P@ssw0rd12345!_to_be_changed_dbuser'
 var dbName = postgresqlDatabase.name
-resource postgresqlUser 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2024-08-01' = {
+resource postgresqlUser 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2022-12-01' = {
   parent: postgresqlServer
   name: 'chatbotdbuser'
   properties: {
@@ -265,7 +269,7 @@ resource kvsPostgreSqlDbUserPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-
 /**************************************************************************/
 // Assign container app the role of blob data contributor to the storage account
 /**************************************************************************/
-resource containerAppIdentity 'Microsoft.App/containerApps@2024-03-01' existing = {
+resource containerAppIdentity 'Microsoft.App/containerApps@2023-05-01' existing = {
   name: containerAppName
 }
 

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.33.93.31351",
-      "templateHash": "11739653908256381269"
+      "templateHash": "12619833542153596416"
     }
   },
   "parameters": {
@@ -91,7 +91,7 @@
     },
     {
       "type": "Microsoft.ContainerRegistry/registries",
-      "apiVersion": "2021-06-01-preview",
+      "apiVersion": "2023-07-01",
       "name": "[variables('containerRegistryName')]",
       "location": "[variables('location')]",
       "sku": {
@@ -103,7 +103,7 @@
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces",
-      "apiVersion": "2021-06-01",
+      "apiVersion": "2023-09-01",
       "name": "[variables('logAnalyticsWorkspaceName')]",
       "location": "[variables('location')]",
       "sku": {
@@ -121,15 +121,15 @@
     },
     {
       "type": "Microsoft.App/managedEnvironments",
-      "apiVersion": "2024-03-01",
+      "apiVersion": "2023-05-01",
       "name": "[variables('containerAppEnvName')]",
       "location": "[variables('location')]",
       "properties": {
         "appLogsConfiguration": {
           "destination": "log-analytics",
           "logAnalyticsConfiguration": {
-            "customerId": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsWorkspaceName')), '2021-06-01').customerId]",
-            "sharedKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsWorkspaceName')), '2024-03-01').primarySharedKey]"
+            "customerId": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsWorkspaceName')), '2023-09-01').customerId]",
+            "sharedKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsWorkspaceName')), '2023-05-01').primarySharedKey]"
           }
         }
       },
@@ -161,7 +161,7 @@
     },
     {
       "type": "Microsoft.App/containerApps",
-      "apiVersion": "2024-03-01",
+      "apiVersion": "2023-05-01",
       "name": "[variables('containerAppName')]",
       "location": "[variables('location')]",
       "properties": {
@@ -181,7 +181,7 @@
           "secrets": [
             {
               "name": "acr-password",
-              "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('containerRegistryName')), '2024-03-01').passwords[0].value]"
+              "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('containerRegistryName')), '2023-05-01').passwords[0].value]"
             }
           ]
         },
@@ -205,9 +205,13 @@
     },
     {
       "type": "Microsoft.DBforPostgreSQL/flexibleServers",
-      "apiVersion": "2024-08-01",
+      "apiVersion": "2022-12-01",
       "name": "[format('{0}pgserver', variables('resourcePrefix'))]",
       "location": "[variables('location')]",
+      "sku": {
+        "name": "Standard_D2s_v3",
+        "tier": "Burstable"
+      },
       "properties": {
         "createMode": "Default",
         "administratorLogin": "adminuser",
@@ -223,7 +227,7 @@
       "apiVersion": "2022-11-01",
       "name": "[format('{0}/{1}', format('{0}KeyVault', variables('resourcePrefix')), 'postgresql_admin')]",
       "properties": {
-        "value": "[reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}pgserver', variables('resourcePrefix'))), '2024-08-01').administratorLogin]"
+        "value": "[reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}pgserver', variables('resourcePrefix'))), '2022-12-01').administratorLogin]"
       },
       "dependsOn": [
         "[resourceId('Microsoft.KeyVault/vaults', format('{0}KeyVault', variables('resourcePrefix')))]",
@@ -235,7 +239,7 @@
       "apiVersion": "2022-11-01",
       "name": "[format('{0}/{1}', format('{0}KeyVault', variables('resourcePrefix')), 'postgresql_admin_password')]",
       "properties": {
-        "value": "[reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}pgserver', variables('resourcePrefix'))), '2024-08-01').administratorLoginPassword]"
+        "value": "[reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}pgserver', variables('resourcePrefix'))), '2022-12-01').administratorLoginPassword]"
       },
       "dependsOn": [
         "[resourceId('Microsoft.KeyVault/vaults', format('{0}KeyVault', variables('resourcePrefix')))]",
@@ -244,7 +248,7 @@
     },
     {
       "type": "Microsoft.DBforPostgreSQL/flexibleServers/databases",
-      "apiVersion": "2024-08-01",
+      "apiVersion": "2022-12-01",
       "name": "[format('{0}/{1}', format('{0}pgserver', variables('resourcePrefix')), 'chatbotdb')]",
       "properties": {
         "charset": "UTF8",
@@ -256,7 +260,7 @@
     },
     {
       "type": "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules",
-      "apiVersion": "2024-08-01",
+      "apiVersion": "2022-12-01",
       "name": "[format('{0}/{1}', format('{0}pgserver', variables('resourcePrefix')), 'AllowContainerApp')]",
       "properties": {
         "startIpAddress": "0.0.0.0",
@@ -269,7 +273,7 @@
     },
     {
       "type": "Microsoft.DBforPostgreSQL/flexibleServers/configurations",
-      "apiVersion": "2024-08-01",
+      "apiVersion": "2022-12-01",
       "name": "[format('{0}/{1}', format('{0}pgserver', variables('resourcePrefix')), 'chatbotdbuser')]",
       "properties": {
         "value": "[format('CREATE USER {0} WITH PASSWORD ''{1}''; GRANT ALL PRIVILEGES ON DATABASE {2} TO {3};', variables('dbUserName'), variables('dbUserPassword'), variables('dbName'), variables('dbUserName'))]"
@@ -307,7 +311,7 @@
       "name": "[guid(resourceGroup().id, resourceId('Microsoft.App/containerApps', variables('containerAppName')), 'BlobDataContributor')]",
       "properties": {
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382b6b1f')]",
-        "principalId": "[reference(resourceId('Microsoft.App/containerApps', variables('containerAppName')), '2024-03-01', 'full').identity.principalId]"
+        "principalId": "[reference(resourceId('Microsoft.App/containerApps', variables('containerAppName')), '2023-05-01', 'full').identity.principalId]"
       }
     }
   ]
