@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.33.93.31351",
-      "templateHash": "1632539275806827176"
+      "templateHash": "9069040692774849622"
     }
   },
   "parameters": {
@@ -216,7 +216,7 @@
     },
     {
       "type": "Microsoft.ContainerRegistry/registries",
-      "apiVersion": "2022-12-01",
+      "apiVersion": "2021-12-01-preview",
       "name": "[variables('containerRegistryName')]",
       "location": "[variables('location')]",
       "sku": {

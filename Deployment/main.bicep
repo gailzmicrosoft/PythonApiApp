@@ -184,7 +184,7 @@ resource kvsPostgreSqlDbUserPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-
 /**************************************************************************/
 // Create container registry and log analytics workspace
 /**************************************************************************/
-resource containerRegistry 'Microsoft.ContainerRegistry/registries@2022-12-01' = {
+resource containerRegistry 'Microsoft.ContainerRegistry/registries@2021-12-01-preview' = {
   name: containerRegistryName
   location: location
   sku: {
