@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.33.93.31351",
-      "templateHash": "12619833542153596416"
+      "templateHash": "2129306204591998182"
     }
   },
   "parameters": {
@@ -91,7 +91,7 @@
     },
     {
       "type": "Microsoft.ContainerRegistry/registries",
-      "apiVersion": "2023-07-01",
+      "apiVersion": "2022-12-01",
       "name": "[variables('containerRegistryName')]",
       "location": "[variables('location')]",
       "sku": {
@@ -103,7 +103,7 @@
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces",
-      "apiVersion": "2023-09-01",
+      "apiVersion": "2022-10-01",
       "name": "[variables('logAnalyticsWorkspaceName')]",
       "location": "[variables('location')]",
       "sku": {
@@ -128,7 +128,7 @@
         "appLogsConfiguration": {
           "destination": "log-analytics",
           "logAnalyticsConfiguration": {
-            "customerId": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsWorkspaceName')), '2023-09-01').customerId]",
+            "customerId": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsWorkspaceName')), '2022-10-01').customerId]",
             "sharedKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsWorkspaceName')), '2023-05-01').primarySharedKey]"
           }
         }

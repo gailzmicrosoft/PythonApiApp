@@ -73,7 +73,7 @@ resource blobContainer 'Microsoft.Storage/storageAccounts/blobServices/container
 /**************************************************************************/
 // Create container registry and log analytics workspace
 /**************************************************************************/
-resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
+resource containerRegistry 'Microsoft.ContainerRegistry/registries@2022-12-01' = {
   name: containerRegistryName
   location: location
   sku: {
@@ -84,11 +84,11 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' =
   }
 }
 
-resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   name: logAnalyticsWorkspaceName
   location: location
   sku: {
-    name: 'PerGB2018'
+    name: 'PerGB2018' // Available SKUs: Free, PerNode, PerGB2018, Standalone, CapacityReservation
   }
   properties: {
     retentionInDays: 30
