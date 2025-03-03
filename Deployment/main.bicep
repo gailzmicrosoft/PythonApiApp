@@ -1,12 +1,37 @@
 
+//**************************************************************************/
+// User input section 
+//**************************************************************************/
 @description('Prefix to use for all resources.')
 param resourcePrefixUser string = 'pycta'
 
+@description('Postgresql Server Admin User Name')
+param postgreSqlServerAdminUser string = 'postgresql_admin'
+
+@description('Postgresql Server Admin Password.')
+@secure()
+param postgreSqlServerAdminPassword string 
+
+var databaseName = 'chatbotdb'
+@description('Postgresql Database - chatbotdb - User Name')
+param dbUserName string = 'postgresql_db_user'
+
+@description('Postgresql Database - chatbotdb - User Password.')
+@secure()
+param dbUserPassword string 
+
+
+var containerAppUserName = 'chatbot-acr-username' 
+var containerAppPassword = 'chatbot-acr-password'
+
+
+/**************************************************************************/
+// Resource name generation section
+/**************************************************************************/
 var trimmedResourcePrefixUser = length(resourcePrefixUser) > 5 ? substring(resourcePrefixUser, 0, 5) : resourcePrefixUser
 var uniString = toLower(substring(uniqueString(subscription().id, resourceGroup().id), 0, 5))
 
 var resourcePrefix = '${trimmedResourcePrefixUser}${uniString}'
-
 
 var location = resourceGroup().location
 //var resourceGroupName = resourceGroup().name
@@ -16,7 +41,6 @@ var containerAppName = '${resourcePrefix}app'
 var logAnalyticsWorkspaceName = '${resourcePrefix}law'
 var storageAccountNameStarter = '${resourcePrefix}storage'
 var storageAccountName = toLower(replace(storageAccountNameStarter, '-', ''))
-
 
 
 /**************************************************************************/
@@ -71,6 +95,93 @@ resource blobContainer 'Microsoft.Storage/storageAccounts/blobServices/container
 
 
 /**************************************************************************/
+// Create azure database for postgresql and database user
+// and store the credentials in key vault
+/**************************************************************************/
+
+resource postgresqlServer 'Microsoft.DBforPostgreSQL/flexibleServers@2022-12-01' = {
+  name: '${resourcePrefix}pgserver'
+  location: location
+  sku: {
+    name: 'B8ms' // available SKUs: B1ms, B2ms, B4ms, B8ms, B16ms
+    tier: 'Burstable'
+  }
+  properties: {
+    createMode: 'Default'
+    administratorLogin: postgreSqlServerAdminUser
+    administratorLoginPassword: postgreSqlServerAdminPassword
+    version: '11'
+    highAvailability: {
+      mode: 'Disabled'
+    }
+  }
+}
+resource kvsPostgreSqlserverAdminUser 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: 'postgresql_admin'
+  properties: {
+    value:postgreSqlServerAdminUser
+  }
+}
+
+resource kvsPostgreSqlserverAdminPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: 'postgresql_admin_password'
+  properties: {
+    value: postgreSqlServerAdminPassword
+  }
+}
+
+// create a database in the postgresql server
+resource postgresqlDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2022-12-01' = {
+  parent: postgresqlServer
+  name: databaseName
+  properties: {
+    charset: 'UTF8'
+    collation: 'English_United States.1252'
+  }
+}
+
+// create a firewall rule to allow access to the postgresql server from the container app
+resource postgresqlFirewallRule 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2022-12-01' = {
+  parent: postgresqlServer
+  name: 'AllowContainerApp'
+  properties: {
+    startIpAddress: '0.0.0.0'
+    endIpAddress: '255.255.255.255'
+  }
+  dependsOn: [
+    containerApp
+  ]
+}
+
+// Create database user in the postgresql server and store the credentials in key vault
+var dbName = postgresqlDatabase.name
+resource postgresqlUser 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2022-12-01' = {
+  parent: postgresqlServer
+  name: 'chatbotdbuser'
+  properties: {
+    value: 'CREATE USER ${dbUserName} WITH PASSWORD \'${dbUserPassword}\'; GRANT ALL PRIVILEGES ON DATABASE ${dbName} TO ${dbUserName};'
+  }
+}
+resource kvsPostgreSqlDbUser 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: 'postgresql_db_user_name'
+  properties: {
+    value:dbUserName
+  }
+}
+resource kvsPostgreSqlDbUserPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: 'postgresql_db_user_password'
+  properties: {
+    value: dbUserPassword
+  }
+}
+
+
+
+/**************************************************************************/
 // Create container registry and log analytics workspace
 /**************************************************************************/
 resource containerRegistry 'Microsoft.ContainerRegistry/registries@2022-12-01' = {
@@ -87,17 +198,12 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2022-12-01' =
 resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   name: logAnalyticsWorkspaceName
   location: location
-  sku: {
-    name: 'PerGB2018' // Available SKUs: Free, PerNode, PerGB2018, Standalone, CapacityReservation
-  }
   properties: {
-    retentionInDays: 30
-    features: {
-      searchVersion: '2.0'
-      dailyQuotaGb: 1
-      maxDailyQuotaGb: 5
-      maxRetentionLimitInDays: 730
+    sku: {
+      name: 'Standard'
     }
+    defaultDataCollectionRuleResourceId: 'string'
+    retentionInDays: 5
   }
 }
 
@@ -113,14 +219,19 @@ resource containerAppEnv 'Microsoft.App/managedEnvironments@2023-05-01' = {
       destination: 'log-analytics'
       logAnalyticsConfiguration: {
         customerId: logAnalyticsWorkspace.properties.customerId
-        sharedKey: listKeys(logAnalyticsWorkspace.id, '2023-05-01').primarySharedKey
+        sharedKey: listKeys(logAnalyticsWorkspace.id, '2021-10-01').primarySharedKey
       }
     }
   }
 }
+resource kvsContainerAppEnvName 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: 'containerAppEnvName'
+  properties: {
+    value: containerAppEnvName
+  }
+}
 
-var containerAppUserName = 'acr-username' // Update the username to comply with naming rules
-var containerAppPassword = 'acr-password' // Update the password to comply with naming rules
 resource kvsContainerAppUserName 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
   parent: keyVault
   name: containerAppUserName
@@ -177,96 +288,6 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
 
 
 /**************************************************************************/
-// Create azure database for postgresql and database user
-// and store the credentials in key vault
-/**************************************************************************/
-// pycta6gfb6pgserver
-resource postgresqlServer 'Microsoft.DBforPostgreSQL/flexibleServers@2022-12-01' = {
-  name: '${resourcePrefix}pgserver'
-  location: location
-  sku: {
-    name: 'Standard_D2s_v3'
-    tier: 'Burstable'
-  }
-  properties: {
-    createMode: 'Default'
-    administratorLogin: 'adminuser'
-    administratorLoginPassword: 'P@ssw0rd12345!_to_be_changed_admin'
-    version: '11'
-    highAvailability: {
-      mode: 'Disabled'
-    }
-  }
-}
-resource kvsPostgreSqlserverAdminUser 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
-  parent: keyVault
-  name: 'postgresql_admin'
-  properties: {
-    value:postgresqlServer.properties.administratorLogin
-  }
-}
-
-resource kvsPostgreSqlserverAdminPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
-  parent: keyVault
-  name: 'postgresql_admin_password'
-  properties: {
-    value: postgresqlServer.properties.administratorLoginPassword
-  }
-}
-
-// create a database in the postgresql server
-resource postgresqlDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2022-12-01' = {
-  parent: postgresqlServer
-  name: 'chatbotdb'
-  properties: {
-    charset: 'UTF8'
-    collation: 'English_United States.1252'
-  }
-}
-
-// create a firewall rule to allow access to the postgresql server from the container app
-resource postgresqlFirewallRule 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2022-12-01' = {
-  parent: postgresqlServer
-  name: 'AllowContainerApp'
-  properties: {
-    startIpAddress: '0.0.0.0'
-    endIpAddress: '255.255.255.255'
-  }
-  dependsOn: [
-    containerApp
-  ]
-}
-
-/**************************************************************************/
-// Create database user in the postgresql server
-// and store the credentials in key vault
-/**************************************************************************/
-var dbUserName = 'chatdbuser'
-var dbUserPassword = 'P@ssw0rd12345!_to_be_changed_dbuser'
-var dbName = postgresqlDatabase.name
-resource postgresqlUser 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2022-12-01' = {
-  parent: postgresqlServer
-  name: 'chatbotdbuser'
-  properties: {
-    value: 'CREATE USER ${dbUserName} WITH PASSWORD \'${dbUserPassword}\'; GRANT ALL PRIVILEGES ON DATABASE ${dbName} TO ${dbUserName};'
-  }
-}
-resource kvsPostgreSqlDbUser 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
-  parent: keyVault
-  name: 'postgresql_db_user_name'
-  properties: {
-    value:dbUserName
-  }
-}
-resource kvsPostgreSqlDbUserPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
-  parent: keyVault
-  name: 'postgresql_db_user_password'
-  properties: {
-    value: dbUserPassword
-  }
-}
-
-/**************************************************************************/
 // Assign container app the role of blob data contributor to the storage account
 /**************************************************************************/
 resource containerAppIdentity 'Microsoft.App/containerApps@2023-05-01' existing = {
@@ -281,3 +302,30 @@ resource blobDataContributorRoleAssignment 'Microsoft.Authorization/roleAssignme
     principalId: containerAppIdentity.identity.principalId
   }
 }
+
+
+/**************************************************************************/
+// Assign Key Vault Access Policy to the container app
+/**************************************************************************/
+resource keyVaultAccessPolicy 'Microsoft.KeyVault/vaults/accessPolicies@2023-07-01' = {
+  name:'add'
+  parent: keyVault
+  properties: {
+    accessPolicies: [
+      {
+        tenantId: subscription().tenantId
+        objectId: containerApp.identity.principalId
+        permissions: {
+          secrets: [
+            'get'
+            'list'
+          ]
+        }
+      }
+    ]
+  }
+}
+
+
+
+
