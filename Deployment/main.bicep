@@ -212,7 +212,7 @@ resource kvsPostgreSqlDbUserPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-
 /**************************************************************************/
 // Use existing container registry and log analytics workspace
 /**************************************************************************/
-resource containerRegistry 'Microsoft.ContainerRegistry/registries@2021-12-01-preview' existing = {
+resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
   name: 'customchatbotcr'
   scope: resourceGroup('custom-chatbot-rg')
 }
@@ -291,7 +291,7 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
       secrets: [
         {
           name: 'acr-password'
-          value: listCredentials(containerRegistry.id, '2023-05-01').passwords[0].value
+          value: listCredentials(containerRegistry.id, '2023-07-01').passwords[0].value
         }
       ]
     }
