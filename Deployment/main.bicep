@@ -20,7 +20,8 @@ param dbUserName string = 'chatbot_user'
 @secure()
 param dbUserPassword string 
 
-
+// This will be user input later. For now it is hardcoded
+@description('Container App ACR Username')
 var containerAppUserName = 'chatbot-acr-username' 
 var containerAppPassword = 'chatbot-acr-password'
 
@@ -116,6 +117,26 @@ resource postgresqlServer 'Microsoft.DBforPostgreSQL/flexibleServers@2022-12-01'
     }
   }
 }
+resource kvsPostgreSqlserverName 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: 'postgresql_server_name'
+  properties: {
+    value: postgresqlServer.name
+  }
+}
+// create a firewall rule to allow access to the postgresql server from the container app
+resource postgresqlFirewallRule 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2022-12-01' = {
+  parent: postgresqlServer
+  name: 'AllowContainerApp'
+  properties: {
+    startIpAddress: '0.0.0.0'
+    endIpAddress: '255.255.255.255'
+  }
+  dependsOn: [
+    containerApp
+  ]
+}
+// create a key vault secret for the postgresql server admin user and password
 resource kvsPostgreSqlserverAdminUser 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
   parent: keyVault
   name: 'postgresql_admin'
@@ -123,7 +144,6 @@ resource kvsPostgreSqlserverAdminUser 'Microsoft.KeyVault/vaults/secrets@2022-11
     value:postgreSqlServerAdminUser
   }
 }
-
 resource kvsPostgreSqlserverAdminPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
   parent: keyVault
   name: 'postgresql_admin_password'
@@ -141,20 +161,6 @@ resource postgresqlDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases
     collation: 'English_United States.1252'
   }
 }
-
-// create a firewall rule to allow access to the postgresql server from the container app
-resource postgresqlFirewallRule 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2022-12-01' = {
-  parent: postgresqlServer
-  name: 'AllowContainerApp'
-  properties: {
-    startIpAddress: '0.0.0.0'
-    endIpAddress: '255.255.255.255'
-  }
-  dependsOn: [
-    containerApp
-  ]
-}
-
 // Create database user in the postgresql server and store the credentials in key vault
 var dbName = postgresqlDatabase.name
 resource postgresqlUser 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2022-12-01' = {
@@ -162,6 +168,13 @@ resource postgresqlUser 'Microsoft.DBforPostgreSQL/flexibleServers/configuration
   name: 'chatbotdbuser'
   properties: {
     value: 'CREATE USER ${dbUserName} WITH PASSWORD \'${dbUserPassword}\'; GRANT ALL PRIVILEGES ON DATABASE ${dbName} TO ${dbUserName};'
+  }
+}
+resource kvsPostgreSqlDbName 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: 'postgresql_db_name'
+  properties: {
+    value: databaseName
   }
 }
 resource kvsPostgreSqlDbUser 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
@@ -180,19 +193,28 @@ resource kvsPostgreSqlDbUserPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-
 }
 
 
-
 /**************************************************************************/
 // Create container registry and log analytics workspace
 /**************************************************************************/
-resource containerRegistry 'Microsoft.ContainerRegistry/registries@2021-12-01-preview' = {
-  name: containerRegistryName
-  location: location
-  sku: {
-    name: 'Basic'
-  }
-  properties: {
-    adminUserEnabled: true
-  }
+// resource containerRegistry 'Microsoft.ContainerRegistry/registries@2021-12-01-preview' = {
+//   name: containerRegistryName
+//   location: location
+//   sku: {
+//     name: 'Basic'
+//   }
+//   properties: {
+//     adminUserEnabled: true
+//   }
+// }
+
+
+
+/**************************************************************************/
+// Use existing container registry and log analytics workspace
+/**************************************************************************/
+resource containerRegistry 'Microsoft.ContainerRegistry/registries@2021-12-01-preview' existing = {
+  name: 'customchatbotcr'
+  scope: resourceGroup('customchatbot-rg')
 }
 
 resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {

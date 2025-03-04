@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.33.93.31351",
-      "templateHash": "9069040692774849622"
+      "version": "0.33.13.18514",
+      "templateHash": "16059358217457466848"
     }
   },
   "parameters": {
@@ -136,6 +136,31 @@
     {
       "type": "Microsoft.KeyVault/vaults/secrets",
       "apiVersion": "2022-11-01",
+      "name": "[format('{0}/{1}', format('{0}KeyVault', variables('resourcePrefix')), 'postgresql_server_name')]",
+      "properties": {
+        "value": "[format('{0}pgserver', variables('resourcePrefix'))]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', format('{0}KeyVault', variables('resourcePrefix')))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}pgserver', variables('resourcePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules",
+      "apiVersion": "2022-12-01",
+      "name": "[format('{0}/{1}', format('{0}pgserver', variables('resourcePrefix')), 'AllowContainerApp')]",
+      "properties": {
+        "startIpAddress": "0.0.0.0",
+        "endIpAddress": "255.255.255.255"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/containerApps', variables('containerAppName'))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}pgserver', variables('resourcePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2022-11-01",
       "name": "[format('{0}/{1}', format('{0}KeyVault', variables('resourcePrefix')), 'postgresql_admin')]",
       "properties": {
         "value": "[parameters('postgreSqlServerAdminUser')]"
@@ -168,19 +193,6 @@
       ]
     },
     {
-      "type": "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules",
-      "apiVersion": "2022-12-01",
-      "name": "[format('{0}/{1}', format('{0}pgserver', variables('resourcePrefix')), 'AllowContainerApp')]",
-      "properties": {
-        "startIpAddress": "0.0.0.0",
-        "endIpAddress": "255.255.255.255"
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.App/containerApps', variables('containerAppName'))]",
-        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}pgserver', variables('resourcePrefix')))]"
-      ]
-    },
-    {
       "type": "Microsoft.DBforPostgreSQL/flexibleServers/configurations",
       "apiVersion": "2022-12-01",
       "name": "[format('{0}/{1}', format('{0}pgserver', variables('resourcePrefix')), 'chatbotdbuser')]",
@@ -190,6 +202,17 @@
       "dependsOn": [
         "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/databases', format('{0}pgserver', variables('resourcePrefix')), variables('databaseName'))]",
         "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}pgserver', variables('resourcePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2022-11-01",
+      "name": "[format('{0}/{1}', format('{0}KeyVault', variables('resourcePrefix')), 'postgresql_db_name')]",
+      "properties": {
+        "value": "[variables('databaseName')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', format('{0}KeyVault', variables('resourcePrefix')))]"
       ]
     },
     {
@@ -213,18 +236,6 @@
       "dependsOn": [
         "[resourceId('Microsoft.KeyVault/vaults', format('{0}KeyVault', variables('resourcePrefix')))]"
       ]
-    },
-    {
-      "type": "Microsoft.ContainerRegistry/registries",
-      "apiVersion": "2021-12-01-preview",
-      "name": "[variables('containerRegistryName')]",
-      "location": "[variables('location')]",
-      "sku": {
-        "name": "Basic"
-      },
-      "properties": {
-        "adminUserEnabled": true
-      }
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces",
@@ -314,7 +325,7 @@
           "secrets": [
             {
               "name": "acr-password",
-              "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', variables('containerRegistryName')), '2023-05-01').passwords[0].value]"
+              "value": "[listCredentials(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, 'customchatbot-rg'), 'Microsoft.ContainerRegistry/registries', 'customchatbotcr'), '2023-05-01').passwords[0].value]"
             }
           ]
         },
@@ -332,8 +343,7 @@
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.App/managedEnvironments', variables('containerAppEnvName'))]",
-        "[resourceId('Microsoft.ContainerRegistry/registries', variables('containerRegistryName'))]"
+        "[resourceId('Microsoft.App/managedEnvironments', variables('containerAppEnvName'))]"
       ]
     },
     {
