@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.33.13.18514",
-      "templateHash": "4579997945633544300"
+      "templateHash": "17671645694500971143"
     }
   },
   "parameters": {
@@ -51,7 +51,8 @@
     "uniString": "[toLower(substring(uniqueString(subscription().id, resourceGroup().id), 0, 5))]",
     "resourcePrefix": "[format('{0}{1}', variables('trimmedResourcePrefixUser'), variables('uniString'))]",
     "location": "[resourceGroup().location]",
-    "containerRegistryName": "[format('{0}acr', variables('resourcePrefix'))]",
+    "containerRegistryName": "customchatbotcr",
+    "containerRegistryUserName": "customchatbotcr",
     "containerAppEnvName": "[format('{0}env', variables('resourcePrefix'))]",
     "containerAppName": "[format('{0}app', variables('resourcePrefix'))]",
     "logAnalyticsWorkspaceName": "[format('{0}law', variables('resourcePrefix'))]",
@@ -93,13 +94,17 @@
       "kind": "StorageV2",
       "sku": {
         "name": "Standard_LRS"
-      }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', format('{0}KeyVault', variables('resourcePrefix')))]"
+      ]
     },
     {
       "type": "Microsoft.Storage/storageAccounts/blobServices",
       "apiVersion": "2023-05-01",
       "name": "[format('{0}/{1}', variables('storageAccountName'), 'default')]",
       "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', format('{0}KeyVault', variables('resourcePrefix')))]",
         "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
       ]
     },
@@ -111,7 +116,8 @@
         "publicAccess": "None"
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('storageAccountName'), 'default')]"
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('storageAccountName'), 'default')]",
+        "[resourceId('Microsoft.KeyVault/vaults', format('{0}KeyVault', variables('resourcePrefix')))]"
       ]
     },
     {
@@ -131,7 +137,10 @@
         "highAvailability": {
           "mode": "Disabled"
         }
-      }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', format('{0}KeyVault', variables('resourcePrefix')))]"
+      ]
     },
     {
       "type": "Microsoft.KeyVault/vaults/secrets",
@@ -189,6 +198,7 @@
         "collation": "English_United States.1252"
       },
       "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', format('{0}KeyVault', variables('resourcePrefix')))]",
         "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}pgserver', variables('resourcePrefix')))]"
       ]
     },
@@ -200,6 +210,7 @@
         "value": "[format('CREATE USER {0} WITH PASSWORD ''{1}''; GRANT ALL PRIVILEGES ON DATABASE {2} TO {3};', parameters('dbUserName'), parameters('dbUserPassword'), variables('dbName'), parameters('dbUserName'))]"
       },
       "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', format('{0}KeyVault', variables('resourcePrefix')))]",
         "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/databases', format('{0}pgserver', variables('resourcePrefix')), variables('databaseName'))]",
         "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}pgserver', variables('resourcePrefix')))]"
       ]
@@ -250,7 +261,10 @@
         "sku": {
           "name": "PerGB2018"
         }
-      }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', format('{0}KeyVault', variables('resourcePrefix')))]"
+      ]
     },
     {
       "type": "Microsoft.App/managedEnvironments",
@@ -267,6 +281,7 @@
         }
       },
       "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', format('{0}KeyVault', variables('resourcePrefix')))]",
         "[resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsWorkspaceName'))]"
       ]
     },
@@ -318,14 +333,14 @@
           "registries": [
             {
               "server": "[format('{0}.azurecr.io', variables('containerRegistryName'))]",
-              "username": "[variables('containerAppUserName')]",
+              "username": "[variables('containerRegistryUserName')]",
               "passwordSecretRef": "acr-password"
             }
           ],
           "secrets": [
             {
               "name": "acr-password",
-              "value": "[listCredentials(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, 'custom-chatbot-rg'), 'Microsoft.ContainerRegistry/registries', 'customchatbotcr'), '2023-07-01').passwords[0].value]"
+              "value": "[listCredentials(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, 'custom-chatbot-rg'), 'Microsoft.ContainerRegistry/registries', variables('containerRegistryName')), '2023-07-01').passwords[0].value]"
             }
           ]
         },
@@ -343,7 +358,12 @@
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.App/managedEnvironments', variables('containerAppEnvName'))]"
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', 'chatbotappdata')]",
+        "[resourceId('Microsoft.App/managedEnvironments', variables('containerAppEnvName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults', format('{0}KeyVault', variables('resourcePrefix')))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/databases', format('{0}pgserver', variables('resourcePrefix')), variables('databaseName'))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('{0}pgserver', variables('resourcePrefix')))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/configurations', format('{0}pgserver', variables('resourcePrefix')), 'chatbotdbuser')]"
       ]
     },
     {

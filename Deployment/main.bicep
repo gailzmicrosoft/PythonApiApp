@@ -35,8 +35,8 @@ var uniString = toLower(substring(uniqueString(subscription().id, resourceGroup(
 var resourcePrefix = '${trimmedResourcePrefixUser}${uniString}'
 
 var location = resourceGroup().location
-//var resourceGroupName = resourceGroup().name
-var containerRegistryName = '${resourcePrefix}acr'
+var containerRegistryName = 'customchatbotcr' // use existing container registry
+var containerRegistryUserName = 'customchatbotcr' // use existing container registry user name. 
 var containerAppEnvName = '${resourcePrefix}env'
 var containerAppName = '${resourcePrefix}app'
 var logAnalyticsWorkspaceName = '${resourcePrefix}law'
@@ -78,11 +78,17 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   sku: {
     name: 'Standard_LRS'
   }
+  dependsOn: [
+    keyVault
+  ]
 }
 // create blob service in the storage account
 resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' = {
   parent: storageAccount
   name: 'default'
+  dependsOn: [
+    keyVault
+  ]
 }
 
 // create a container named mortgageapp in the storage account
@@ -92,6 +98,9 @@ resource blobContainer 'Microsoft.Storage/storageAccounts/blobServices/container
   properties: {
     publicAccess: 'None'
   }
+  dependsOn: [
+    keyVault
+  ]
 }
 
 
@@ -116,6 +125,9 @@ resource postgresqlServer 'Microsoft.DBforPostgreSQL/flexibleServers@2022-12-01'
       mode: 'Disabled'
     }
   }
+  dependsOn: [
+    keyVault
+  ]
 }
 resource kvsPostgreSqlserverName 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
   parent: keyVault
@@ -160,6 +172,9 @@ resource postgresqlDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases
     charset: 'UTF8'
     collation: 'English_United States.1252'
   }
+  dependsOn: [
+    keyVault
+  ]
 }
 // Create database user in the postgresql server and store the credentials in key vault
 var dbName = postgresqlDatabase.name
@@ -169,6 +184,9 @@ resource postgresqlUser 'Microsoft.DBforPostgreSQL/flexibleServers/configuration
   properties: {
     value: 'CREATE USER ${dbUserName} WITH PASSWORD \'${dbUserPassword}\'; GRANT ALL PRIVILEGES ON DATABASE ${dbName} TO ${dbUserName};'
   }
+  dependsOn: [
+    keyVault
+  ]
 }
 resource kvsPostgreSqlDbName 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
   parent: keyVault
@@ -213,7 +231,7 @@ resource kvsPostgreSqlDbUserPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-
 // Use existing container registry and log analytics workspace
 /**************************************************************************/
 resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
-  name: 'customchatbotcr'
+  name: containerRegistryName
   scope: resourceGroup('custom-chatbot-rg')
 }
 
@@ -229,6 +247,9 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10
       name: 'PerGB2018'
     }
   }
+  dependsOn: [
+    keyVault
+  ]
 }
 
 
@@ -247,6 +268,9 @@ resource containerAppEnv 'Microsoft.App/managedEnvironments@2023-05-01' = {
       }
     }
   }
+  dependsOn: [
+    keyVault
+  ]
 }
 resource kvsContainerAppEnvName 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
   parent: keyVault
@@ -284,14 +308,15 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
       registries: [
         {
           server: '${containerRegistryName}.azurecr.io'
-          username: containerAppUserName 
-          passwordSecretRef: 'acr-password' 
+          username: containerRegistryUserName
+          passwordSecretRef: 'acr-password' // Updated to use Key Vault secret for ACR password
         }
       ]
       secrets: [
         {
           name: 'acr-password'
-          value: listCredentials(containerRegistry.id, '2023-07-01').passwords[0].value
+          value:containerRegistry.listCredentials().passwords[0].value // Use the ACR password from the container registry
+          //value: listCredentials(containerRegistry.id, '2023-07-01').passwords[0].value // this does not work
         }
       ]
     }
@@ -308,6 +333,13 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
       ]
     }
   }
+  dependsOn: [
+    blobContainer
+    postgresqlServer
+    postgresqlDatabase
+    postgresqlUser
+    keyVault
+  ]
 }
 
 
