@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.33.13.18514",
-      "templateHash": "16059358217457466848"
+      "templateHash": "10826032185994878880"
     }
   },
   "parameters": {
@@ -325,7 +325,7 @@
           "secrets": [
             {
               "name": "acr-password",
-              "value": "[listCredentials(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, 'customchatbot-rg'), 'Microsoft.ContainerRegistry/registries', 'customchatbotcr'), '2023-05-01').passwords[0].value]"
+              "value": "[listCredentials(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, 'custom-chatbot-rg'), 'Microsoft.ContainerRegistry/registries', 'customchatbotcr'), '2023-05-01').passwords[0].value]"
             }
           ]
         },

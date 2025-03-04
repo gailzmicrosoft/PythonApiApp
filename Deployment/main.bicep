@@ -214,7 +214,7 @@ resource kvsPostgreSqlDbUserPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-
 /**************************************************************************/
 resource containerRegistry 'Microsoft.ContainerRegistry/registries@2021-12-01-preview' existing = {
   name: 'customchatbotcr'
-  scope: resourceGroup('customchatbot-rg')
+  scope: resourceGroup('custom-chatbot-rg')
 }
 
 resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
