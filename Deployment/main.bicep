@@ -5,9 +5,6 @@
 @description('Prefix to use for all resources.')
 param resourcePrefixUser string = 'pycta'
 
-@description('Postgresql Database - chatbotdb - User Password.')
-@secure()
-param dbUserPassword string 
 
 // This will be user input later. For now it is hardcoded
 @description('Container App ACR Username')
@@ -21,7 +18,8 @@ var containerAppPassword = 'chatbot-acr-password'
 var trimmedResourcePrefixUser = length(resourcePrefixUser) > 5 ? substring(resourcePrefixUser, 0, 5) : resourcePrefixUser
 var uniString = toLower(substring(uniqueString(subscription().id, resourceGroup().id), 0, 5))
 
-var resourcePrefix = '${trimmedResourcePrefixUser}${uniString}'
+var resourcePrefixRaw = '${trimmedResourcePrefixUser}${uniString}'
+var resourcePrefix = toLower(resourcePrefixRaw)
 
 var location = resourceGroup().location
 var containerRegistryName = 'customchatbotcr' // use existing container registry
@@ -252,6 +250,7 @@ resource keyVaultAccessPolicy 'Microsoft.KeyVault/vaults/accessPolicies@2023-07-
         objectId: containerApp.identity.principalId
         permissions: {
           secrets: [
+            'create'
             'get'
             'list'
           ]

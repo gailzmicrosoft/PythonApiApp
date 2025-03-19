@@ -4,10 +4,16 @@
 //################################################################################################################################
 
 targetScope = 'resourceGroup'
-
+//targetScope = 'subscription'
 
 @description('Prefix to use for all resources.')
-param resourcePrefixUser string = 'sampleapp'
+param resourcePrefixUser string = 'gailz'
+
+@description('Deployment Location')
+param location string = 'eastus2'
+
+@description('Name of the resource group to be used')
+param rgName string ='gaiye-test-rg'
 
 @description('OpenAI model configuration')
 param model object = {
@@ -19,14 +25,70 @@ param model object = {
 /**************************************************************************/
 // Resource name generation section
 /**************************************************************************/
-var resourceTokenRaw = toLower(uniqueString(subscription().id, resourceGroup().id, resourcePrefixUser))
+var resourceTokenRaw = toLower(uniqueString(subscription().id, rgName, resourcePrefixUser))
 var trimmedToken = length(resourceTokenRaw) > 8 ? substring(resourceTokenRaw, 0, 8) : resourceTokenRaw
-var tokenProcessed =toLower(replace(trimmedToken, '_', ''))
-var resourcePrefix = '${resourcePrefixUser}${tokenProcessed}'
+var resourcePrefixRaw = '${resourcePrefixUser}${trimmedToken}'
+var resourcePrefix =toLower(replace(resourcePrefixRaw, '_', ''))
+
+var miName = '${resourcePrefix}MiD'
+
+var rgId = resourceId('Microsoft.Resources/resourceGroups', rgName)
+
+/**************************************************************************/
+// Create Mid and Assign all necessary roles
+/**************************************************************************/
+
+resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: miName
+  location: location
+}
 
 
-var location = resourceGroup().location
-//var subscriptionId = subscription().id
+//See https://docs.microsoft.com/azure/role-based-access-control/built-in-roles#owner')
+resource ownerRoleDefinition 'Microsoft.Authorization/roleDefinitions@2022-04-01' = {
+  //scope: rg
+  name: '8e3af657-a8ff-443c-a75c-2fe8c4bcb635' // role definition id for owner role
+}
+
+@description('This is the ACR pull role definition')
+resource acrPullRoleDefinition 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
+  name: '7f951dda-4ed3-4680-a7ca-43fe172d538d' // role definition for azure container registry pull 
+}
+
+@description('This is the blob storage data contributor role definition')
+resource blobStorageDataContributorRoleDefinition 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
+  name: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // role definition for azure blob storage data contributor 
+}
+
+resource ownerRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(rgId, managedIdentity.id, ownerRoleDefinition.id)
+  properties: {
+    principalId: managedIdentity.properties.principalId
+    roleDefinitionId: ownerRoleDefinition.id
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Assign the ACR pull role to the managed identity
+resource acrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(rgId, managedIdentity.id, acrPullRoleDefinition.id)
+  properties: {
+    principalId: managedIdentity.properties.principalId
+    roleDefinitionId: acrPullRoleDefinition.id
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Assign the blob storage data contributor role to the managed identity
+resource blobStorageDataContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(rgId, managedIdentity.id, blobStorageDataContributorRoleDefinition.id)
+  properties: {
+    principalId: managedIdentity.properties.principalId
+    roleDefinitionId: blobStorageDataContributorRoleDefinition.id
+    principalType: 'ServicePrincipal'
+  }
+}
+
 
 /**************************************************************************/
 // Create a Key Vault
@@ -41,6 +103,40 @@ resource keyVault 'Microsoft.KeyVault/vaults@2022-11-01' = {
     }
     tenantId: subscription().tenantId
     accessPolicies: []
+  }
+}
+
+
+/**************************************************************************/
+// Assign Key Vault Access Policy to App Service
+/**************************************************************************/
+resource keyVaultAccessPolicy 'Microsoft.KeyVault/vaults/accessPolicies@2022-11-01' = {
+  name:'add'
+  parent: keyVault
+  properties: {
+    accessPolicies: [
+      {
+        tenantId: subscription().tenantId
+        objectId: managedIdentity.properties.principalId
+        permissions: {
+          certificates: [
+            'create'
+            'get'
+            'list'
+          ]
+          keys: [
+            'create'
+            'get'
+            'list'
+          ]
+          secrets: [
+            'create'
+            'get'
+            'list'
+          ]
+        }
+      }
+    ]
   }
 }
 
@@ -73,45 +169,6 @@ resource containerListResource 'Microsoft.Storage/storageAccounts/blobServices/c
 
 
 
-/**************************************************************************/
-// Create Azure Open AI Service
-/**************************************************************************/
-resource openAIService 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
-  name: '${resourcePrefix}AiService'
-  location: location
-  kind: 'OpenAI'
-  sku: {
-    name: 'S0'
-  }
-  properties: {
-    customSubDomainName:'${resourcePrefix}AiService'
-    publicNetworkAccess: 'Enabled'
-    networkAcls: {
-        defaultAction: 'Allow'
-    }
-  }
-}
-
-/**************************************************************************/
-// define Open AI models 
-/**************************************************************************/
-resource gpt4Deployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' =  {
-  parent: openAIService
-  name: '${resourcePrefix}OpenAiModel'
-  sku: {
-    name: 'Standard'
-    capacity: model.capacity
-  }
-  properties: {
-    model: {
-      format: 'OpenAI'
-      name: model.name
-      version: model.version
-      sourceAccount: openAIService.id
-    }
-  }
-}
-
 resource kvsStorageAccountName 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
   parent: keyVault
   name: 'azure-storage-account-name'
@@ -128,27 +185,6 @@ resource kvsApiKey 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
   }
 }
 
-resource kvsOpenAIServiceId 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
-  parent: keyVault
-  name: 'openai-service-id'
-  properties: {
-    value: openAIService.id
-  }
-}
-resource kvsOpenAIServiceKey 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
-  parent: keyVault
-  name: 'openai-service-key'
-  properties: {
-    value: openAIService.listKeys().key1
-  }
-}
-resource kvsOpenAIServiceEndpoint 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
-  parent: keyVault
-  name: 'openai-service-endpoint'
-  properties: {
-    value: openAIService.properties.endpoint
-  }
-}
 
 /**************************************************************************/
 // App Service Plan and App Service
@@ -204,60 +240,60 @@ resource appService 'Microsoft.Web/sites@2024-04-01' = {
   }
 }
 
-/**************************************************************************/
-// Assign Key Vault Access Policy to App Service
-/**************************************************************************/
-resource keyVaultAccessPolicy 'Microsoft.KeyVault/vaults/accessPolicies@2022-11-01' = {
-  name:'add'
-  parent: keyVault
-  properties: {
-    accessPolicies: [
-      {
-        tenantId: subscription().tenantId
-        objectId: appService.identity.principalId
-        permissions: {
-          secrets: [
-            'get'
-            'list'
-          ]
-        }
-      }
-    ]
-  }
-}
 
-/**************************************************************************/
-// Assign App Service Identity the Contributor role for the Resource Group
-/**************************************************************************/
-//var resourceGroupContributorRoleID = 'b24988ac-6180-42a0-ab88-20f7382dd24c'
-var resourceGroupContributorRoleID = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')
 
-resource appServiceRoleAssignmentContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(appService.id, 'Contributor')
-  scope: resourceGroup()
-  properties: {
-    //roleDefinitionId: '${subscriptionId}/providers/Microsoft.Authorization/roleDefinitions/${resourceGroupContributorRoleID}'
-    roleDefinitionId: resourceGroupContributorRoleID
-    principalId: appService.identity.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
+// /**************************************************************************/
+// // Create Azure Open AI Service
+// /**************************************************************************/
+// resource openAIService 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
+//   name: '${resourcePrefix}aizervice'
+//   location: location
+//   kind: 'OpenAI'
+//   sku: {
+//     name: 'S0'
+//   }
+//   properties: {
+//     }
+// }
 
-/**************************************************************************/
-// Assign App Service Identity the Storage Blob Data Contributor role for the Storage Account
-/**************************************************************************/
-//var storageBlobDataContributorRoleID = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
-var storageBlobDataContributorRoleID = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
-resource roleAssignmentStorageBlob 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(appService.id, 'StorageBlobDataContributor')
-  scope: resourceGroup()
-  properties: {
-    //roleDefinitionId: '${subscriptionId}/providers/Microsoft.Authorization/roleDefinitions/${storageBlobDataContributorRoleID}'
-    roleDefinitionId: storageBlobDataContributorRoleID
-    principalId: appService.identity.principalId
-    principalType: 'ServicePrincipal'
-    //scope: storageAccount.id
-    //scope: resourceGroup().id
-  }
-}
+// /**************************************************************************/
+// // define Open AI models 
+// /**************************************************************************/
+// resource gpt4Deployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' =  {
+//   parent: openAIService
+//   name: '${resourcePrefix}OpenAiModel'
+//   sku: {
+//     name: 'Standard'
+//     capacity: model.capacity
+//   }
+//   properties: {
+//     model: {
+//       format: 'OpenAI'
+//       name: model.name
+//       version: model.version
+//       sourceAccount: openAIService.id
+//     }
+//   }
+// }
 
+// resource kvsOpenAIServiceId 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+//   parent: keyVault
+//   name: 'openai-service-id'
+//   properties: {
+//     value: openAIService.id
+//   }
+// }
+// resource kvsOpenAIServiceKey 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+//   parent: keyVault
+//   name: 'openai-service-key'
+//   properties: {
+//     value: openAIService.listKeys().key1
+//   }
+// }
+// resource kvsOpenAIServiceEndpoint 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+//   parent: keyVault
+//   name: 'openai-service-endpoint'
+//   properties: {
+//     value: openAIService.properties.endpoint
+//   }
+// }
