@@ -45,8 +45,7 @@ resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-
 
 
 //See https://docs.microsoft.com/azure/role-based-access-control/built-in-roles#owner')
-resource ownerRoleDefinition 'Microsoft.Authorization/roleDefinitions@2022-04-01' = {
-  //scope: rg
+resource ownerRoleDefinition 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
   name: '8e3af657-a8ff-443c-a75c-2fe8c4bcb635' // role definition id for owner role
 }
 
@@ -103,40 +102,6 @@ resource keyVault 'Microsoft.KeyVault/vaults@2022-11-01' = {
     }
     tenantId: subscription().tenantId
     accessPolicies: []
-  }
-}
-
-
-/**************************************************************************/
-// Assign Key Vault Access Policy to App Service
-/**************************************************************************/
-resource keyVaultAccessPolicy 'Microsoft.KeyVault/vaults/accessPolicies@2022-11-01' = {
-  name:'add'
-  parent: keyVault
-  properties: {
-    accessPolicies: [
-      {
-        tenantId: subscription().tenantId
-        objectId: managedIdentity.properties.principalId
-        permissions: {
-          certificates: [
-            'create'
-            'get'
-            'list'
-          ]
-          keys: [
-            'create'
-            'get'
-            'list'
-          ]
-          secrets: [
-            'create'
-            'get'
-            'list'
-          ]
-        }
-      }
-    ]
   }
 }
 
