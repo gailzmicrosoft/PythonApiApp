@@ -15,12 +15,8 @@ param location string = 'eastus2'
 @description('Name of the resource group to be used')
 param rgName string ='gaiye-test-rg'
 
-@description('OpenAI model configuration')
-param model object = {
-  name: 'gpt-4o-mini'
-  version: '2024-07-18'
-  capacity: 1
-}
+@description('Initial valye of the x-api-key for REST API calls')
+param xapikey string = 'PythonApiKey'
 
 /**************************************************************************/
 // Resource name generation section
@@ -33,6 +29,7 @@ var resourcePrefix =toLower(replace(resourcePrefixRaw, '_', ''))
 var miName = '${resourcePrefix}MiD'
 
 var rgId = resourceId('Microsoft.Resources/resourceGroups', rgName)
+
 
 /**************************************************************************/
 // Create Mid and Assign all necessary roles
@@ -146,7 +143,7 @@ resource kvsApiKey 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
   parent: keyVault
   name: 'x-api-key'
   properties: {
-    value:'AppApiKey'
+    value: xapikey
   }
 }
 
@@ -205,60 +202,3 @@ resource appService 'Microsoft.Web/sites@2024-04-01' = {
   }
 }
 
-
-
-// /**************************************************************************/
-// // Create Azure Open AI Service
-// /**************************************************************************/
-// resource openAIService 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
-//   name: '${resourcePrefix}aizervice'
-//   location: location
-//   kind: 'OpenAI'
-//   sku: {
-//     name: 'S0'
-//   }
-//   properties: {
-//     }
-// }
-
-// /**************************************************************************/
-// // define Open AI models 
-// /**************************************************************************/
-// resource gpt4Deployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' =  {
-//   parent: openAIService
-//   name: '${resourcePrefix}OpenAiModel'
-//   sku: {
-//     name: 'Standard'
-//     capacity: model.capacity
-//   }
-//   properties: {
-//     model: {
-//       format: 'OpenAI'
-//       name: model.name
-//       version: model.version
-//       sourceAccount: openAIService.id
-//     }
-//   }
-// }
-
-// resource kvsOpenAIServiceId 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
-//   parent: keyVault
-//   name: 'openai-service-id'
-//   properties: {
-//     value: openAIService.id
-//   }
-// }
-// resource kvsOpenAIServiceKey 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
-//   parent: keyVault
-//   name: 'openai-service-key'
-//   properties: {
-//     value: openAIService.listKeys().key1
-//   }
-// }
-// resource kvsOpenAIServiceEndpoint 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
-//   parent: keyVault
-//   name: 'openai-service-endpoint'
-//   properties: {
-//     value: openAIService.properties.endpoint
-//   }
-// }
