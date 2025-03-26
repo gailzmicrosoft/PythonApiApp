@@ -268,25 +268,25 @@ var SOURCE_CODE_PATH = '${baseURL}src'
 
 var bashScriptArguments = '${acrResource.name} ${dockerImageName} ${dockerImageTag} ${DOCKERFILE_PATH} ${SOURCE_CODE_PATH}'
 
-resource callBashScript 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
-  kind:'AzureCLI'
-  name: 'runBashToBuildandPushDockerImage'
-  location: location // Replace with your desired location
-  identity: {
-    type: 'UserAssigned'
+// resource invokeBashBuildAndPushDocker 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
+//   kind:'AzureCLI'
+//   name: 'runBashToBuildandPushDockerImage'
+//   location: location // Replace with your desired location
+//   identity: {
+//     type: 'UserAssigned'
     
-    userAssignedIdentities: {
-      '${managedIdentity.id}' : {}
-    }
-  }
-  properties: {
-    azCliVersion: '2.52.0'
-    primaryScriptUri: '${baseURL}scripts/build_and_push_image.sh'
-    arguments: bashScriptArguments
-    retentionInterval: 'PT1H' // Specify the desired retention interval
-    cleanupPreference:'OnSuccess'
-  }
-}
+//     userAssignedIdentities: {
+//       '${managedIdentity.id}' : {}
+//     }
+//   }
+//   properties: {
+//     azCliVersion: '2.52.0'
+//     primaryScriptUri: '${baseURL}scripts/build_and_push_image.sh'
+//     arguments: bashScriptArguments
+//     retentionInterval: 'PT1H' // Specify the desired retention interval
+//     cleanupPreference:'OnSuccess'
+//   }
+// }
 
 
 /**************************************************************************/
