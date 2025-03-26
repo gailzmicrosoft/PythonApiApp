@@ -11,11 +11,10 @@ COPY apiapp/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application code into the container
-COPY apiapp /app/apiapp
-COPY templates /app/templates
+COPY apiapp /app
 
 # Set environment variables
-ENV FLASK_APP=apiapp/app.py
+ENV FLASK_APP=app.py
 ENV FLASK_RUN_HOST=0.0.0.0
 ENV FLASK_RUN_PORT=8080
 
