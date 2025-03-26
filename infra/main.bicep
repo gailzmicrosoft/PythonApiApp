@@ -36,7 +36,8 @@ var dockerImageTag = 'latest' // This image must be built and pushed to the cont
 
 
 // test images
-var dockerImageURLTest = 'docker.io/library/nginx:latest'
+var testImageName = 'nginx'
+var testImageURL = 'docker.io/library/nginx:latest'
 
 
 
@@ -184,12 +185,6 @@ resource acrPushRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-
   }
 }
 
-
-
-//output acrAdminPassword string = acrResource.listCredentials().passwords[0].value
-///output acrAdminPassword string = acrResource.listCredentials().passwords.[0].value
-
-
 /**************************************************************************/
 // Store ACR credentials in Key Vault
 /**************************************************************************/
@@ -201,24 +196,6 @@ resource kvsAcrLoginServer 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
     value: acrResource.properties.loginServer
   }
 }
-
-resource kvsAcrAdminUsername 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
-  parent: keyVault
-  name: 'acr-admin-username'
-  properties: {
-    value: acrResource.listCredentials(acrResource.id).username
-  }
-}
-
-// Not ablt to get password from ACR
-// resource kvsAcrPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
-//   parent: keyVault
-//   name: 'acr-password'
-//   properties: {
-//     value: listCredentials(acrResource.id).adminPasswords[0].value
-//   }
-// }
-
 
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: '${resourcePrefix}LogAnalytics'
@@ -257,7 +234,7 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-03-01'
 }
 
 // Prepare input for the bash script
-var baseURL = 'https://raw.githubusercontent.com/gailzmicrosoft/TestCode/main/'
+var baseURL = 'https://raw.githubusercontent.com/gailzmicrosoft/PythonApiApp/main/'
 var DOCKERFILE_PATH = '${baseURL}src/Dockerfile'
 var SOURCE_CODE_PATH = '${baseURL}src'
 // ACR_NAME=$1
@@ -268,25 +245,25 @@ var SOURCE_CODE_PATH = '${baseURL}src'
 
 var bashScriptArguments = '${acrResource.name} ${dockerImageName} ${dockerImageTag} ${DOCKERFILE_PATH} ${SOURCE_CODE_PATH}'
 
-// resource invokeBashBuildAndPushDocker 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
-//   kind:'AzureCLI'
-//   name: 'runBashToBuildandPushDockerImage'
-//   location: location // Replace with your desired location
-//   identity: {
-//     type: 'UserAssigned'
+resource invokeBashBuildAndPushDocker 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
+  kind:'AzureCLI'
+  name: 'runBashToBuildandPushDockerImage'
+  location: location // Replace with your desired location
+  identity: {
+    type: 'UserAssigned'
     
-//     userAssignedIdentities: {
-//       '${managedIdentity.id}' : {}
-//     }
-//   }
-//   properties: {
-//     azCliVersion: '2.52.0'
-//     primaryScriptUri: '${baseURL}scripts/build_and_push_image.sh'
-//     arguments: bashScriptArguments
-//     retentionInterval: 'PT1H' // Specify the desired retention interval
-//     cleanupPreference:'OnSuccess'
-//   }
-// }
+    userAssignedIdentities: {
+      '${managedIdentity.id}' : {}
+    }
+  }
+  properties: {
+    azCliVersion: '2.52.0'
+    primaryScriptUri: '${baseURL}scripts/build_and_push_image.sh'
+    arguments: bashScriptArguments
+    retentionInterval: 'PT1H' // Specify the desired retention interval
+    cleanupPreference:'OnSuccess'
+  }
+}
 
 
 /**************************************************************************/
@@ -304,12 +281,10 @@ var appEnvironVars = [
   }
 ]
 
-/**************************************************************************/
-// Create a container app
-/**************************************************************************/
 
+var dockerImageURL = '${acrResource.name}.azurecr.io/${dockerImageName}:${dockerImageTag}'
 
-resource containerAppsTest 'Microsoft.App/containerApps@2023-05-01' = {
+resource containerApps 'Microsoft.App/containerApps@2023-05-01' = {
   name: '${resourcePrefix}conapp'
   location: location
   identity: {
@@ -336,8 +311,17 @@ resource containerAppsTest 'Microsoft.App/containerApps@2023-05-01' = {
       revisionSuffix: 'v1'
       containers: [
         {
-          name: 'test-docker-image-name'  // must be lowercase. dash is accepted 
-          image: dockerImageURLTest
+          name: testImageName
+          image: testImageURL
+          env: appEnvironVars
+          resources: {
+            cpu: 1
+            memory: '2.0Gi'
+          }
+        }
+        {
+          name: dockerImageName
+          image: dockerImageURL
           env: appEnvironVars
           resources: {
             cpu: 1
@@ -348,46 +332,3 @@ resource containerAppsTest 'Microsoft.App/containerApps@2023-05-01' = {
     }
   }
 }
-
-
-// var updatedDockerImageURL = '${acrResource.id}.azurecr.io/${dockerImageName}:${dockerImageTag}'
-
-// resource containerApps 'Microsoft.App/containerApps@2023-05-01' = {
-//   name: '${resourcePrefix}conapp'
-//   location: location
-//   identity: {
-//     type: 'UserAssigned'
-//     userAssignedIdentities: {
-//       '${managedIdentity.id}' : {}
-//     }
-//   }
-//   properties: {
-//     environmentId: containerAppsEnvironment.id
-//     configuration: {
-//       ingress: {
-//         external: true
-//         targetPort: 80
-//         traffic: [
-//           {
-//             latestRevision: true
-//             weight: 100
-//           }
-//         ]
-//       }
-//     }
-//     template: {
-//       revisionSuffix: 'v1'
-//       containers: [
-//         {
-//           name: dockerImageName
-//           image: dockerImageURL
-//           env: appEnvironVars
-//           resources: {
-//             cpu: 1
-//             memory: '2.0Gi'
-//           }
-//         }
-//       ]
-//     }
-//   }
-// }
