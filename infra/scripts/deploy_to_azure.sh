@@ -52,7 +52,7 @@ echo "Logging in to Azure Container Registry..."
 az acr login --name $container_registry
 
 # Change to the directory containing the Dockerfile
-cd /c:/Repos/PythonApiApp/RestAPIs/src
+cd /c:/Repos/PythonApiApp/src/apiapp
 
 # Build the Docker image
 echo "Building Docker image..."

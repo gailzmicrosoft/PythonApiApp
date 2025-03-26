@@ -2,8 +2,8 @@
 $acrName = "gailzxdnshsxdazurecr"  # Replace with your ACR name
 $imageName = "pythonapiapp"
 $imageTag = "latest"
-$dockerfilePath = "Dockerfile_apiapp"  # Path to your Dockerfile in the src directory
-$sourceCodePath = "."  # Path to your source code directory
+$dockerfilePath = "../../src/Dockerfile_apiapp"  # Path to your Dockerfile in the src directory
+$sourceCodePath = "../../src"  # Path to your source code directory
 
 $imageBuildAndPush = "$acrName.azurecr.io/"+"$imageName"+":"+$imageTag
 
