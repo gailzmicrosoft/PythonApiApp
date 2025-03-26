@@ -30,12 +30,11 @@ var miName = '${resourcePrefix}MiD'
 
 var rgId = resourceId('Microsoft.Resources/resourceGroups', rgName)
 
-var containerRegistryName = '${resourcePrefix}acr'
 
 var dockerImageName = 'pythonapiapp' // This image must be built and pushed to the container registry already
-var imageVersion = 'latest'
+var dockerImageTag = 'latest' // This image must be built and pushed to the container registry already
 
-var dockerImageURL = '${containerRegistryName}.azurecr.io/${dockerImageName}:${imageVersion}'
+
 // test images
 var dockerImageURLTest = 'docker.io/library/nginx:latest'
 
@@ -173,6 +172,54 @@ resource acrResource 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   }
 }
 
+
+// Assign the AcrPush role to the managed identity
+// The AcrPush role allows the managed identity to push images to the ACR
+resource acrPushRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(rgId, managedIdentity.id, '8311e382-0749-4cb8-b61a-304f252e45ec') // AcrPush role definition ID
+  properties: {
+    principalId: managedIdentity.properties.principalId
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '8311e382-0749-4cb8-b61a-304f252e45ec')
+    principalType: 'ServicePrincipal'
+  }
+}
+
+
+
+//output acrAdminPassword string = acrResource.listCredentials().passwords[0].value
+///output acrAdminPassword string = acrResource.listCredentials().passwords.[0].value
+
+
+/**************************************************************************/
+// Store ACR credentials in Key Vault
+/**************************************************************************/
+
+resource kvsAcrLoginServer 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: 'acr-login-server'
+  properties: {
+    value: acrResource.properties.loginServer
+  }
+}
+
+resource kvsAcrAdminUsername 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: 'acr-admin-username'
+  properties: {
+    value: acrResource.listCredentials(acrResource.id).username
+  }
+}
+
+// Not ablt to get password from ACR
+// resource kvsAcrPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+//   parent: keyVault
+//   name: 'acr-password'
+//   properties: {
+//     value: listCredentials(acrResource.id).adminPasswords[0].value
+//   }
+// }
+
+
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: '${resourcePrefix}LogAnalytics'
   location: location
@@ -209,6 +256,38 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-03-01'
   }
 }
 
+// Prepare input for the bash script
+var baseURL = 'https://raw.githubusercontent.com/gailzmicrosoft/TestCode/main/'
+var DOCKERFILE_PATH = '${baseURL}src/Dockerfile'
+var SOURCE_CODE_PATH = '${baseURL}src'
+// ACR_NAME=$1
+// IMAGE_NAME=$2
+// IMAGE_TAG=$3
+// DOCKERFILE_PATH=$4
+// SOURCE_CODE_PATH=$5
+
+var bashScriptArguments = '${acrResource.name} ${dockerImageName} ${dockerImageTag} ${DOCKERFILE_PATH} ${SOURCE_CODE_PATH}'
+
+resource callBashScript 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
+  kind:'AzureCLI'
+  name: 'runBashToBuildandPushDockerImage'
+  location: location // Replace with your desired location
+  identity: {
+    type: 'UserAssigned'
+    
+    userAssignedIdentities: {
+      '${managedIdentity.id}' : {}
+    }
+  }
+  properties: {
+    azCliVersion: '2.52.0'
+    primaryScriptUri: '${baseURL}scripts/build_and_push_image.sh'
+    arguments: bashScriptArguments
+    retentionInterval: 'PT1H' // Specify the desired retention interval
+    cleanupPreference:'OnSuccess'
+  }
+}
+
 
 /**************************************************************************/
 // Some environment variables for the container app
@@ -225,8 +304,13 @@ var appEnvironVars = [
   }
 ]
 
-resource containerApps 'Microsoft.App/containerApps@2023-05-01' = {
-  name: '${resourcePrefix}ContainerApp'
+/**************************************************************************/
+// Create a container app
+/**************************************************************************/
+
+
+resource containerAppsTest 'Microsoft.App/containerApps@2023-05-01' = {
+  name: '${resourcePrefix}conapp'
   location: location
   identity: {
     type: 'UserAssigned'
@@ -252,15 +336,58 @@ resource containerApps 'Microsoft.App/containerApps@2023-05-01' = {
       revisionSuffix: 'v1'
       containers: [
         {
-          name: 'dockerTestImage'
+          name: 'test-docker-image-name'  // must be lowercase. dash is accepted 
           image: dockerImageURLTest
           env: appEnvironVars
           resources: {
             cpu: 1
-            memory: '1.0Gi'
+            memory: '2.0Gi'
           }
         }
       ]
     }
   }
 }
+
+
+// var updatedDockerImageURL = '${acrResource.id}.azurecr.io/${dockerImageName}:${dockerImageTag}'
+
+// resource containerApps 'Microsoft.App/containerApps@2023-05-01' = {
+//   name: '${resourcePrefix}conapp'
+//   location: location
+//   identity: {
+//     type: 'UserAssigned'
+//     userAssignedIdentities: {
+//       '${managedIdentity.id}' : {}
+//     }
+//   }
+//   properties: {
+//     environmentId: containerAppsEnvironment.id
+//     configuration: {
+//       ingress: {
+//         external: true
+//         targetPort: 80
+//         traffic: [
+//           {
+//             latestRevision: true
+//             weight: 100
+//           }
+//         ]
+//       }
+//     }
+//     template: {
+//       revisionSuffix: 'v1'
+//       containers: [
+//         {
+//           name: dockerImageName
+//           image: dockerImageURL
+//           env: appEnvironVars
+//           resources: {
+//             cpu: 1
+//             memory: '2.0Gi'
+//           }
+//         }
+//       ]
+//     }
+//   }
+// }
