@@ -1,3 +1,4 @@
+#.\build_and_push_image.ps1       
 # Variables
 $acrName = "gailzxdnshsxdazurecr"  # Replace with your ACR name
 $imageName = "pythonapiapp"
@@ -6,7 +7,6 @@ $dockerfilePath = "../../src/Dockerfile_apiapp"  # Path to your Dockerfile in th
 $sourceCodePath = "../../src"  # Path to your source code directory
 
 $imageBuildAndPush = "$acrName.azurecr.io/"+"$imageName"+":"+$imageTag
-
 
 # Log in to Azure
 az login

@@ -7,7 +7,7 @@ targetScope = 'resourceGroup'
 //targetScope = 'subscription'
 
 @description('Prefix to use for all resources.')
-param resourcePrefixUser string = 'gailz'
+param resourcePrefixUser string = 'gzpython'
 
 @description('Deployment Location')
 param location string = 'eastus2'
@@ -27,11 +27,12 @@ var resourcePrefixRaw = '${resourcePrefixUser}${trimmedToken}'
 var resourcePrefix =toLower(replace(resourcePrefixRaw, '_', ''))
 
 var miName = '${resourcePrefix}MiD'
+var acrName = '${resourcePrefix}azurecr'
 
 var rgId = resourceId('Microsoft.Resources/resourceGroups', rgName)
 
 
-var dockerImageName = 'pythonapiapp' // This image must be built and pushed to the container registry already
+var dockerImageName = 'chatbotapp' // This image must be built and pushed to the container registry already
 var dockerImageTag = 'latest' // This image must be built and pushed to the container registry already
 
 
@@ -56,40 +57,57 @@ resource acrPullRoleDefinition 'Microsoft.Authorization/roleDefinitions@2022-04-
   name: '7f951dda-4ed3-4680-a7ca-43fe172d538d' // role definition for azure container registry pull 
 }
 
+@description('This is the ACR pull role definition')
+resource acrPushRoleDefinition 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
+  name: '8311e382-0749-4cb8-b61a-304f252e45ec' // role definition for azure container registry push
+}
+
 @description('This is the blob storage data contributor role definition')
 resource blobStorageDataContributorRoleDefinition 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
   name: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // role definition for azure blob storage data contributor 
 }
 
 resource ownerRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(rgId, managedIdentity.id, ownerRoleDefinition.id)
+  name: guid(rgId, managedIdentity.id, ownerRoleDefinition.name)
   properties: {
     principalId: managedIdentity.properties.principalId
-    roleDefinitionId: ownerRoleDefinition.id
+    roleDefinitionId: ownerRoleDefinition.name
     principalType: 'ServicePrincipal'
   }
 }
 
-// Assign the ACR pull role to the managed identity
-resource acrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(rgId, managedIdentity.id, acrPullRoleDefinition.id)
-  properties: {
-    principalId: managedIdentity.properties.principalId
-    roleDefinitionId: acrPullRoleDefinition.id
-    principalType: 'ServicePrincipal'
-  }
-}
 
 // Assign the blob storage data contributor role to the managed identity
 resource blobStorageDataContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(rgId, managedIdentity.id, blobStorageDataContributorRoleDefinition.id)
+  name: guid(rgId, managedIdentity.id, blobStorageDataContributorRoleDefinition.name)
   properties: {
     principalId: managedIdentity.properties.principalId
-    roleDefinitionId: blobStorageDataContributorRoleDefinition.id
+    roleDefinitionId: blobStorageDataContributorRoleDefinition.name
     principalType: 'ServicePrincipal'
   }
 }
 
+
+// Assign the AcrPull role to the managed identity
+resource acrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(rgId, managedIdentity.id, acrPullRoleDefinition.name) // AcrPull role definition ID
+  properties: {
+    principalId: managedIdentity.properties.principalId
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleDefinition.name)
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Assign the AcrPush role to the managed identity
+// The AcrPush role allows the managed identity to push images to the ACR
+resource acrPushRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(rgId, managedIdentity.id, acrPushRoleDefinition.name) // AcrPush role definition ID
+  properties: {
+    principalId: managedIdentity.properties.principalId
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPushRoleDefinition.name)
+    principalType: 'ServicePrincipal'
+  }
+}
 
 /**************************************************************************/
 // Create a Key Vault
@@ -171,7 +189,7 @@ resource kvsApiKey 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
 /**************************************************************************/
 
 resource acrResource 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
-  name: '${resourcePrefix}azurecr'
+  name: acrName
   location: location
   sku: {
     name: 'Basic'
@@ -207,16 +225,6 @@ resource kvsAcrPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
   }
 }
 
-// Assign the AcrPush role to the managed identity
-// The AcrPush role allows the managed identity to push images to the ACR
-resource acrPushRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(rgId, managedIdentity.id, '8311e382-0749-4cb8-b61a-304f252e45ec') // AcrPush role definition ID
-  properties: {
-    principalId: managedIdentity.properties.principalId
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '8311e382-0749-4cb8-b61a-304f252e45ec')
-    principalType: 'ServicePrincipal'
-  }
-}
 
 
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
@@ -295,17 +303,18 @@ resource acrTask 'Microsoft.ContainerRegistry/registries/tasks@2019-04-01' = {
   }
 }
 
-resource acrTaskRun 'Microsoft.ContainerRegistry/registries/taskRuns@2019-06-01-preview' = {
-  parent: acrResource
-  name: 'buildAndPushTaskRun'
-  location: location
-  properties: {
-    runRequest: {
-      type: 'TaskRunRequest'
-      taskId: acrTask.id
-    }
-  }
-}
+// resource acrTaskRun 'Microsoft.ContainerRegistry/registries/taskRuns@2019-06-01-preview' = {
+//   parent: acrResource
+//   name: 'buildAndPushTaskRun'
+//   location: location
+//   properties: {
+//     runRequest: {
+//       type: 'TaskRunRequest'
+//       taskId: acrTask.id
+//     }
+//   }
+// }
+
 
 
 
@@ -326,54 +335,89 @@ var appEnvironVars = [
 
 
 
-// // test images
-// var testImageName = 'nginx'
-// var testImageURL = 'docker.io/library/nginx:latest'
-// var dockerImageURL = '${acrResource.name}.azurecr.io/${dockerImageName}:${dockerImageTag}'
+// test images
+var testImageName = 'pythonapiapp'
+//var testImageURL = 'docker.io/library/nginx:latest'
+var dockerImageURL = '${acrResource.name}.azurecr.io/${dockerImageName}:${dockerImageTag}'
+var testDockerImageURL = '${acrResource.name}.azurecr.io/${testImageName}:${dockerImageTag}'
 
-// resource containerApps 'Microsoft.App/containerApps@2023-05-01' = {
-//   name: '${resourcePrefix}conapp'
-//   location: location
-//   identity: {
-//     type: 'UserAssigned'
-//     userAssignedIdentities: {
-//       '${managedIdentity.id}' : {}
-//     }
-//   }
-//   properties: {
-//     environmentId: containerAppsEnvironment.id
-//     configuration: {
-//       ingress: {
-//         external: true
-//         targetPort: 80
-//         traffic: [
-//           {
-//             latestRevision: true
-//             weight: 100
-//           }
-//         ]
-//       }
-//       registries: [
-//         {
-//           server: acrResource.properties.loginServer
-//           username: '@Microsoft.KeyVault/Vaults/${keyVault.name}/Secrets/acr-username'
-//           passwordSecretRef: '@Microsoft.KeyVault/Vaults/${keyVault.name}/Secrets/acr-password'
-//         }
-//       ]
-//     }
-//     template: {
-//       revisionSuffix: 'v1'
-//       containers: [
-//         {
-//           name: dockerImageName
-//           image: dockerImageURL
-//           env: appEnvironVars
-//           resources: {
-//             cpu: 1
-//             memory: '2.0Gi'
-//           }
-//         }
-//       ]
-//     }
-//   }
-// }
+resource containerApps 'Microsoft.App/containerApps@2023-05-01' = {
+  name: '${resourcePrefix}containerapp'
+  location: location
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${managedIdentity.id}' : {}
+    }
+  }
+  properties: {
+    environmentId: containerAppsEnvironment.id
+    configuration: {
+      secrets: [
+        {
+          name:'keyvault-uri'
+          value: keyVault.properties.vaultUri
+        }
+        {
+          name: 'acr-password'
+          value: acrResource.listCredentials().passwords[0].value
+        }
+        {
+          name: 'x-api-key'
+          value: xapikey
+        }
+      ]
+      ingress: {
+        external: true
+        targetPort: 80
+        traffic: [
+          {
+            latestRevision: true
+            weight: 100
+          }
+        ]
+      }
+      registries: [
+        {
+          server: acrResource.properties.loginServer
+          identity: managedIdentity.id
+          username:acrName
+          passwordSecretRef:'acr-password'
+          //passwordSecretRef:listSecrets(keyVault.id, 'acr-password').value
+        }
+      ]
+    }
+    template: {
+      revisionSuffix: 'v1'
+      containers: [
+        {
+          name: 'nginx'
+          image: 'docker.io/library/nginx:latest'
+          env: appEnvironVars
+          resources: {
+            cpu: 1
+            memory: '2.0Gi'
+          }
+        }
+        // {
+        //   name: testImageName
+        //   image: testDockerImageURL
+        //   env: appEnvironVars
+        //   resources: {
+        //     cpu: 1
+        //     memory: '2.0Gi'
+        //   }
+        // }
+        // {
+        //   name: dockerImageName
+        //   image: dockerImageURL
+        //   env: appEnvironVars
+        //   resources: {
+        //     cpu: 1
+        //     memory: '2.0Gi'
+        //   }
+        // }
+      ]
+    }
+  }
+}
