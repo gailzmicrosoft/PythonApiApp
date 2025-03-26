@@ -1,5 +1,6 @@
 import os
-from flask import Flask, request, jsonify
+import datetime
+from flask import Flask, request, jsonify, render_template, redirect, url_for
 from functools import wraps
 
 app = Flask(__name__)
@@ -37,19 +38,30 @@ def check_orders():
     first_name = request.args.get("first_name")
     last_name = request.args.get("last_name")
     email = request.args.get("email")
-
+    order_date = request.args.get("order_date")
+    comments = request.args.get("comments")
+  
     # For demonstration purposes, we'll just return the received data
     # In a real application, you would query your database or perform other logic here
     return jsonify({
-        "message": "Order check received",
+        "message": "check_order request received",
         "first_name": first_name,
         "last_name": last_name,
-        "email": email
+        "email": email,
+        "order_date": order_date,
+        "comments": comments
     })
 
 @app.route("/")
 def hello():
-    return "Hello, World!"
+    today = datetime.datetime.now()
+    formatted_date = today.strftime("%Y-%m-%d %H:%M:%S")
+    print(f"Current date and time: {formatted_date}")
+    return render_template("index.html", current_date=formatted_date)
+
+@app.route("/check_orders_form")
+def check_orders_form():
+    return render_template("check_orders.html")
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8080)
