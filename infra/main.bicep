@@ -30,6 +30,16 @@ var miName = '${resourcePrefix}MiD'
 
 var rgId = resourceId('Microsoft.Resources/resourceGroups', rgName)
 
+var containerRegistryName = '${resourcePrefix}acr'
+
+var dockerImageName = 'pythonapiapp' // This image must be built and pushed to the container registry already
+var imageVersion = 'latest'
+
+var dockerImageURL = '${containerRegistryName}.azurecr.io/${dockerImageName}:${imageVersion}'
+// test images
+var dockerImageURLTest = 'docker.io/library/nginx:latest'
+
+
 
 /**************************************************************************/
 // Create Mid and Assign all necessary roles
@@ -106,7 +116,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2022-11-01' = {
 // Create a storage account and a container
 /**************************************************************************/
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
-  name: '${toLower(resourcePrefix)}storage'
+  name: '${resourcePrefix}storage'
   location: location
   kind: 'StorageV2'
   sku: {
@@ -122,7 +132,7 @@ resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01'
 
 var containerList = [ { name: 'raw' }, { name: 'processed' }, { name: 'results' } ]
 resource containerListResource 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = [for container in containerList: {
-  name: '${resourcePrefix}${container.name}container'
+  name: container.name
   parent: blobService
   properties: {
     publicAccess: 'None'
@@ -149,56 +159,108 @@ resource kvsApiKey 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
 
 
 /**************************************************************************/
-// App Service Plan and App Service
+// Azure Container Registry and Container Apps etc
 /**************************************************************************/
-resource appServicePlan 'Microsoft.Web/serverfarms@2024-04-01' = {
-  name: '${resourcePrefix}AppServicePlan'
+
+resource acrResource 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
+  name: '${resourcePrefix}azurecr'
   location: location
-  kind: 'linux'
   sku: {
-    name: 'P1v3'
-    tier: 'PremiumV3'
-    size: 'P1v3'
-    family: 'P'
-    capacity: 1
+    name: 'Basic'
   }
   properties: {
-    perSiteScaling: false
-    reserved: true
+    adminUserEnabled: true
   }
-
 }
 
-
-resource appService 'Microsoft.Web/sites@2024-04-01' = {
-  name: '${resourcePrefix}AppService'
+resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
+  name: '${resourcePrefix}LogAnalytics'
   location: location
-  kind: 'app'
-  tags:{
-    displayName: 'Mortgage Advisor'
-    environment: 'test'
-  }
   properties: {
-    serverFarmId: appServicePlan.id
-    httpsOnly: true
-    endToEndEncryptionEnabled:false
-    siteConfig: {
-      linuxFxVersion: 'PYTHON|3.11.9'
-      appSettings: [
-        {
-          name:'ENVIRONMENT'
-          value:'Release'
-        }
-        {
-          name:'KEY_VAULT_URI'
-          value: keyVault.properties.vaultUri
-        }
-      ]
-      healthCheckPath:'/health' // Add this line to enable health check
+    retentionInDays: 30
+    sku: {
+      name: 'PerGB2018' 
     }
   }
-  identity: {
-    type: 'SystemAssigned'
+}
+
+
+resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
+  name: '${resourcePrefix}AppInsights'
+  location: location
+  kind: 'web'
+  properties: {
+    Application_Type: 'web'
+    WorkspaceResourceId: logAnalytics.id
   }
 }
 
+resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
+  name: '${resourcePrefix}ContainerAppsEnv'
+  location: location
+  properties: {
+    appLogsConfiguration: {
+      destination: 'log-analytics'
+      logAnalyticsConfiguration: {
+        customerId: logAnalytics.properties.customerId
+        sharedKey: logAnalytics.listKeys().primarySharedKey
+      }
+    }
+  }
+}
+
+
+/**************************************************************************/
+// Some environment variables for the container app
+/**************************************************************************/
+
+var appEnvironVars = [
+  {
+    name: 'KEY_VAULT_URI'
+    value: keyVault.properties.vaultUri
+  }
+  {
+    name: 'APPLICATIONINSIGHTS_INSTRUMENTATION_KEY'
+    value: applicationInsights.properties.ConnectionString
+  }
+]
+
+resource containerApps 'Microsoft.App/containerApps@2023-05-01' = {
+  name: '${resourcePrefix}ContainerApp'
+  location: location
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${managedIdentity.id}' : {}
+    }
+  }
+  properties: {
+    environmentId: containerAppsEnvironment.id
+    configuration: {
+      ingress: {
+        external: true
+        targetPort: 80
+        traffic: [
+          {
+            latestRevision: true
+            weight: 100
+          }
+        ]
+      }
+    }
+    template: {
+      revisionSuffix: 'v1'
+      containers: [
+        {
+          name: 'dockerTestImage'
+          image: dockerImageURLTest
+          env: appEnvironVars
+          resources: {
+            cpu: 1
+            memory: '1.0Gi'
+          }
+        }
+      ]
+    }
+  }
+}
