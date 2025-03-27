@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Check Orders</title>
+    <script>
+        function submitForm(event) {
+            event.preventDefault();
+            const apiKey = "TestKey"; // Replace with your actual API key
+            const form = event.target;
+            const formData = new FormData(form);
+            const queryString = new URLSearchParams(formData).toString();
+            fetch(`/check_orders?${queryString}`, {
+                method: 'GET',
+                headers: {
+                    'x-api-key': apiKey
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Handle the response data
+                console.log(data);
+                alert(JSON.stringify(data));
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        }
+    </script>
+</head>
+<body>
+    <h1>Check Your Orders</h1>
+    <form onsubmit="submitForm(event)">
+        <label for="first_name">First Name:</label>
+        <input type="text" id="first_name" name="first_name" required><br><br>
+        <label for="last_name">Last Name:</label>
+        <input type="text" id="last_name" name="last_name" required><br><br>
+        <label for="email">Email:</label>
+        <input type="email" id="email" name="email" required><br><br>
+        <label for="order_date">Order Date:</label>
+        <input type="date" id="order_date" name="order_date" required><br><br>
+        <label for="comments">Comments:</label>
+        <textarea id="comments" name="comments"></textarea><br><br>
+        <button type="submit">Submit</button>
+    </form>
+</body>
+</html>
