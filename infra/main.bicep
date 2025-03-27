@@ -6,6 +6,10 @@
 targetScope = 'resourceGroup'
 //targetScope = 'subscription'
 
+@description('Timestamp for generating unique revision suffix')
+param deploymentTimestamp string = utcNow('yyyyMMddHHmm')
+//param deploymentTimestamp string = utcNow('yyyyMMddHHmmss')
+
 @description('Prefix to use for all resources.')
 param resourcePrefixUser string = 'gztemp' // gzpython used in gaiye-python-app-rg
 
@@ -91,7 +95,6 @@ resource assignMidToAcrPushRole 'Microsoft.Authorization/roleAssignments@2022-04
     principalType: 'ServicePrincipal'
   }
 }
-
 
 /**************************************************************************/
 // Create a Key Vault
@@ -201,14 +204,13 @@ resource kvsAcrUsername 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
     value: acrName
   }
 }
-// This one has issues 
-// resource kvsAcrPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
-//   parent: keyVault
-//   name: 'acr-password'
-//   properties: {
-//     value: acrResource.listCredentials().passwords[0].value
-//   }
-// }
+resource kvsAcrPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: 'acr-password'
+  properties: {
+    value: acrResource.listCredentials().passwords[0].value
+  }
+}
 
 
 
@@ -248,57 +250,52 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-03-01'
   }
 }
 
+var contextPath = 'https://github.com/gailzmicrosoft/PythonApiApp'
+var dockerFilePath = 'Dockerfile_root'
 
-// // Prepare input for the ACR Task
-// var baseURL = 'https://raw.githubusercontent.com/gailzmicrosoft/PythonApiApp/main'
-// var DOCKERFILE_PATH = '${baseURL}/src/Dockerfile_apiapp'
-// var SOURCE_CODE_PATH = '${baseURL}/src'
 
-// resource acrTask 'Microsoft.ContainerRegistry/registries/tasks@2019-04-01' = {
-//   parent: acrResource
-//   name: 'buildAndPushImageTask'
-//   location: location
-//   properties: {
-//     status: 'Enabled'
-//     platform: {
-//       os: 'Linux'
-//       architecture: 'amd64'
-//     }
-//     agentConfiguration: {
-//       cpu: 2
-//     }
-//     step: {
-//       type: 'Docker'
-//       contextPath: SOURCE_CODE_PATH
-//       dockerFilePath: DOCKERFILE_PATH
-//       imageNames: [
-//         '${acrResource.name}.azurecr.io/${dockerImageName}:${dockerImageTag}'
-//       ]
-//       isPushEnabled: true
-//       noCache: false
-//     }
-//     trigger: {
-//       sourceTriggers: []
-//       baseImageTrigger: {
-//         status: 'Enabled'
-//         name: 'baseImageTrigger'
-//         baseImageTriggerType: 'All'
-//       }
-//     }
-//   }
-// }
+/**************************************************************************/
+// ACR Task to Build and Push Docker Image
+/**************************************************************************/
+resource acrTask 'Microsoft.ContainerRegistry/registries/tasks@2019-04-01' = {
+  parent: acrResource
+  name: 'buildAndPushTask'
+  location: location
+  properties: {
+    status: 'Enabled'
+    platform: {
+      os: 'Linux'
+      architecture: 'amd64'
+    }
+    agentConfiguration: {
+      cpu: 2
+    }
+    step: {
+      type: 'Docker'
+      //contextPath: repoURL
+      //contextPath: baseURL
+      contextPath: contextPath
+      dockerFilePath: dockerFilePath
+      imageNames: [
+        '${acrResource.name}.azurecr.io/${dockerImageName}:${dockerImageTag}'
+      ]
+      isPushEnabled: true
+    }
+  }
+}
 
-// resource acrTaskRun 'Microsoft.ContainerRegistry/registries/taskRuns@2019-06-01-preview' = {
-//   parent: acrResource
-//   name: 'buildAndPushTaskRun'
-//   location: location
-//   properties: {
-//     runRequest: {
-//       type: 'TaskRunRequest'
-//       taskId: acrTask.id
-//     }
-//   }
-// }
+
+resource acrTaskRun 'Microsoft.ContainerRegistry/registries/taskRuns@2019-06-01-preview' = {
+  parent: acrResource
+  name: 'buildAndPushTaskRun'
+  location: location
+  properties: {
+    runRequest: {
+      type: 'TaskRunRequest'
+      taskId: acrTask.id
+    }
+  }
+}
 
 
 
@@ -307,104 +304,82 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-03-01'
 // Some environment variables for the container app
 /**************************************************************************/
 
-// var appEnvironVars = [
-//   {
-//     name: 'KEY_VAULT_URI'
-//     value: keyVault.properties.vaultUri
-//   }
-//   {
-//     name: 'APPLICATIONINSIGHTS_INSTRUMENTATION_KEY'
-//     value: applicationInsights.properties.ConnectionString
-//   }
-// ]
+var appEnvironVars = [
+  {
+    name: 'KEY_VAULT_URI'
+    value: keyVault.properties.vaultUri
+  }
+  {
+    name: 'APPLICATIONINSIGHTS_INSTRUMENTATION_KEY'
+    value: applicationInsights.properties.ConnectionString
+  }
+]
 
+resource containerApps 'Microsoft.App/containerApps@2023-05-01' = {
+  name: '${resourcePrefix}cntrapptest'
+  location: location
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${managedIdentity.id}' : {}
+    }
+  }
+  properties: {
+    environmentId: containerAppsEnvironment.id
+    configuration: {
+      secrets: [
+        {
+          name: 'keyvault-uri'
+          value: keyVault.properties.vaultUri
+        }
+        {
+          name: 'x-api-key'
+          value: kvsApiKey.properties.secretUriWithVersion
+        }
+      ]
+      ingress: {
+        external: true
+        targetPort: 8080
+        traffic: [
+          {
+            latestRevision: true
+            weight: 100
+          }
+        ]
+      }
+      registries: [
+        {
+          server: '${acrResource.name}.azurecr.io'
+          identity: managedIdentity.id
+        }
+      ]
+    }
+    template: {
+      revisionSuffix: 'v1-${deploymentTimestamp}' // Generate a unique revision suffix using the current timestamp
+      containers: [
+        {
+          name: dockerImageName
+          image: '${acrResource.name}.azurecr.io/${dockerImageName}:${dockerImageTag}'
+          env: appEnvironVars
+          resources: {
+            cpu: 1
+            memory: '2.0Gi'
+          }
+        }
+        // {
+        //   name: 'nginx'
+        //   image: 'docker.io/library/nginx:latest'
+        //   env: appEnvironVars
+        //   resources: {
+        //     cpu: 1
+        //     memory: '2.0Gi'
+        //   }
+        // }
 
-
-// // test images
-// var testImageName = 'pythonapiapp'
-// //var testImageURL = 'docker.io/library/nginx:latest'
-// var dockerImageURL = '${acrResource.name}.azurecr.io/${dockerImageName}:${dockerImageTag}'
-// var testDockerImageURL = '${acrResource.name}.azurecr.io/${testImageName}:${dockerImageTag}'
-
-// resource containerApps 'Microsoft.App/containerApps@2023-05-01' = {
-//   name: '${resourcePrefix}containerapp'
-//   location: location
-//   identity: {
-//     type: 'UserAssigned'
-//     userAssignedIdentities: {
-//       '${managedIdentity.id}' : {}
-//     }
-//   }
-//   properties: {
-//     environmentId: containerAppsEnvironment.id
-//     configuration: {
-//       secrets: [
-//         {
-//           name: 'keyvault-uri'
-//           value: keyVault.properties.vaultUri
-//         }
-//         {
-//           name: 'acr-username'
-//           value: kvsAcrUsername.properties.secretUriWithVersion
-//         }
-//         {
-//           name: 'acr-password'
-//           value: kvsAcrPassword.properties.secretUriWithVersion
-//         }
-//         {
-//           name: 'x-api-key'
-//           value: kvsApiKey.properties.secretUriWithVersion
-//         }
-//       ]
-//       ingress: {
-//         external: true
-//         targetPort: 80
-//         traffic: [
-//           {
-//             latestRevision: true
-//             weight: 100
-//           }
-//         ]
-//       }
-//       registries: [
-//         {
-//           server: acrResource.properties.loginServer
-//           username: kvsAcrUsername.properties.secretUriWithVersion
-//           passwordSecretRef: 'acr-password'
-//         }
-//       ]
-//     }
-//     template: {
-//       revisionSuffix: 'v1'
-//       containers: [
-//         {
-//           name: 'nginx'
-//           image: 'docker.io/library/nginx:latest'
-//           env: appEnvironVars
-//           resources: {
-//             cpu: 1
-//             memory: '2.0Gi'
-//           }
-//         }
-//         // {
-//         //   name: testImageName
-//         //   image: testDockerImageURL
-//         //   env: appEnvironVars
-//         //   resources: {
-//         //     cpu: 1
-//         //     memory: '2.0Gi'
-//         //   }
-//         // }
-//         // {
-//         //   name: dockerImageName
-//         //   image: dockerImageURL
-//         //   env: appEnvironVars
-//         //   resources: {
-//         //     cpu: 1
-//         //     memory: '2.0Gi'
-//         //   }
-//         // }
-//       ]
-//     }
-//   }
-// }
+      ]
+    }
+  }
+  dependsOn: [
+    acrTaskRun // Ensure the container app waits for the ACR Task Run to complete
+  ]
+}
