@@ -25,7 +25,7 @@ jobs:
 
     - name: Build and Push Docker Image
       run: |
-        docker build -t ${{ secrets.ACR_NAME }}.azurecr.io/pythonapiapptemp:latest -f src/Dockerfile src
+        docker build -t ${{ secrets.ACR_NAME }}.azurecr.io/pythonapiapptemp:latest -f Dockerfile_root .
         docker push ${{ secrets.ACR_NAME }}.azurecr.io/pythonapiapptemp:latest
 
   deploy-to-containerapp:
