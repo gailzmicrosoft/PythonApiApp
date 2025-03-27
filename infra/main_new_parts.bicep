@@ -275,13 +275,27 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-03-01'
 
 // Prepare input for the ACR Task
 var baseURL = 'https://raw.githubusercontent.com/gailzmicrosoft/PythonApiApp/main'
-var DOCKERFILE_PATH = '${baseURL}/src/Dockerfile'
-//var DOCKERFILE_PATH = '${baseURL}/src/Dockerfile'
-var SOURCE_CODE_PATH = '${baseURL}/src/apiapp'
+var repoURL = 'https://github.com/gailzmicrosoft/PythonApiApp'
 
+
+
+// var contextPath = 'https://raw.githubusercontent.com/gailzmicrosoft/PythonApiApp/main/src'
+// var dockerFilePath = './Dockerfile'
+
+
+//var contextPath = 'https://raw.githubusercontent.com/gailzmicrosoft/PythonApiApp/main/'
+
+
+var contextPath = 'https://github.com/gailzmicrosoft/PythonApiApp'
+var dockerFilePath = 'Dockerfile_root'
+
+
+/**************************************************************************/
+// ACR Task to Build and Push Docker Image
+/**************************************************************************/
 resource acrTask 'Microsoft.ContainerRegistry/registries/tasks@2019-04-01' = {
   parent: acrResource
-  name: 'buildAndPushImageTask'
+  name: 'buildAndPushTask'
   location: location
   properties: {
     status: 'Enabled'
@@ -294,24 +308,18 @@ resource acrTask 'Microsoft.ContainerRegistry/registries/tasks@2019-04-01' = {
     }
     step: {
       type: 'Docker'
-      contextPath: SOURCE_CODE_PATH
-      dockerFilePath: DOCKERFILE_PATH
+      //contextPath: repoURL
+      //contextPath: baseURL
+      contextPath: contextPath
+      dockerFilePath: dockerFilePath
       imageNames: [
         '${acrResource.name}.azurecr.io/${dockerImageName}:${dockerImageTag}'
       ]
       isPushEnabled: true
-      noCache: false
-    }
-    trigger: {
-      sourceTriggers: []
-      baseImageTrigger: {
-        status: 'Enabled'
-        name: 'baseImageTrigger'
-        baseImageTriggerType: 'All'
-      }
     }
   }
 }
+
 
 resource acrTaskRun 'Microsoft.ContainerRegistry/registries/taskRuns@2019-06-01-preview' = {
   parent: acrResource
@@ -345,89 +353,89 @@ var appEnvironVars = [
 
 
 
-// test images
-var testImageName = 'pythonapiapptemp'
-var testImageTag = 'latest' // This image must be built and pushed to the container registry already
-//var testImageURL = 'docker.io/library/nginx:latest'
-var acrServerFQN = '${acrResource.name}.azurecr.io'
-var dockerImageURL = '${acrResource.name}.azurecr.io/${dockerImageName}:${dockerImageTag}'
-var testDockerImageURL = '${acrResource.name}.azurecr.io/${testImageName}:${testImageTag}'
+// // test images
+// var testImageName = 'chatbotapptest'
+// var testImageTag = 'latest' // This image must be built and pushed to the container registry already
+// //var testImageURL = 'docker.io/library/nginx:latest'
+// var acrServerFQN = '${acrResource.name}.azurecr.io'
+// var dockerImageURL = '${acrResource.name}.azurecr.io/${dockerImageName}:${dockerImageTag}'
+// var testDockerImageURL = '${acrResource.name}.azurecr.io/${testImageName}:${testImageTag}'
 
-resource containerApps 'Microsoft.App/containerApps@2023-05-01' = {
-  name: '${resourcePrefix}cntrapptest'
-  location: location
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${managedIdentity.id}' : {}
-    }
-  }
-  properties: {
-    environmentId: containerAppsEnvironment.id
-    configuration: {
-      secrets: [
-        {
-          name: 'keyvault-uri'
-          value: keyVault.properties.vaultUri
-        }
-        {
-          name: 'x-api-key'
-          value: kvsApiKey.properties.secretUriWithVersion
-        }
-      ]
-      ingress: {
-        external: true
-        targetPort: 8080
-        traffic: [
-          {
-            latestRevision: true
-            weight: 100
-          }
-        ]
-      }
-      registries: [
-        {
-          server: acrServerFQN
-          identity: managedIdentity.id
-          // Username and passsword are not needed if using managed identity
-          // username: kvsAcrUsername.properties.value
-          // passwordSecretRef: 'acr-password'
-        }
-      ]
-    }
-    template: {
-      //revisionMode: 'Multiple'
-      revisionSuffix: 'v1-${deploymentTimestamp}' // Generate a unique revision suffix using the current timestamp
-      containers: [
-        {
-          name: dockerImageName
-          image: dockerImageURL
-          env: appEnvironVars
-          resources: {
-            cpu: 1
-            memory: '2.0Gi'
-          }
-        }
-        // {
-        //   name: testImageName
-        //   image: testDockerImageURL
-        //   env: appEnvironVars
-        //   resources: {
-        //     cpu: 1
-        //     memory: '2.0Gi'
-        //   }
-        // }
-        // {
-        //   name: 'nginx'
-        //   image: 'docker.io/library/nginx:latest'
-        //   env: appEnvironVars
-        //   resources: {
-        //     cpu: 1
-        //     memory: '2.0Gi'
-        //   }
-        // }
+// resource containerApps 'Microsoft.App/containerApps@2023-05-01' = {
+//   name: '${resourcePrefix}cntrapptest'
+//   location: location
+//   identity: {
+//     type: 'UserAssigned'
+//     userAssignedIdentities: {
+//       '${managedIdentity.id}' : {}
+//     }
+//   }
+//   properties: {
+//     environmentId: containerAppsEnvironment.id
+//     configuration: {
+//       secrets: [
+//         {
+//           name: 'keyvault-uri'
+//           value: keyVault.properties.vaultUri
+//         }
+//         {
+//           name: 'x-api-key'
+//           value: kvsApiKey.properties.secretUriWithVersion
+//         }
+//       ]
+//       ingress: {
+//         external: true
+//         targetPort: 8080
+//         traffic: [
+//           {
+//             latestRevision: true
+//             weight: 100
+//           }
+//         ]
+//       }
+//       registries: [
+//         {
+//           server: acrServerFQN
+//           identity: managedIdentity.id
+//           // Username and passsword are not needed if using managed identity
+//           // username: kvsAcrUsername.properties.value
+//           // passwordSecretRef: 'acr-password'
+//         }
+//       ]
+//     }
+//     template: {
+//       //revisionMode: 'Multiple'
+//       revisionSuffix: 'v1-${deploymentTimestamp}' // Generate a unique revision suffix using the current timestamp
+//       containers: [
+//         {
+//           name: dockerImageName
+//           image: dockerImageURL
+//           env: appEnvironVars
+//           resources: {
+//             cpu: 1
+//             memory: '2.0Gi'
+//           }
+//         }
+//         // {
+//         //   name: testImageName
+//         //   image: testDockerImageURL
+//         //   env: appEnvironVars
+//         //   resources: {
+//         //     cpu: 1
+//         //     memory: '2.0Gi'
+//         //   }
+//         // }
+//         // {
+//         //   name: 'nginx'
+//         //   image: 'docker.io/library/nginx:latest'
+//         //   env: appEnvironVars
+//         //   resources: {
+//         //     cpu: 1
+//         //     memory: '2.0Gi'
+//         //   }
+//         // }
 
-      ]
-    }
-  }
-}
+//       ]
+//     }
+//   }
+// }
