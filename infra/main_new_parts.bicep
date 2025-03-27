@@ -273,56 +273,57 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-03-01'
 }
 
 
-// // Prepare input for the ACR Task
-// var baseURL = 'https://raw.githubusercontent.com/gailzmicrosoft/PythonApiApp/main'
-// var DOCKERFILE_PATH = '${baseURL}/src/Dockerfile_apiapp'
-// var SOURCE_CODE_PATH = '${baseURL}/src'
+// Prepare input for the ACR Task
+var baseURL = 'https://raw.githubusercontent.com/gailzmicrosoft/PythonApiApp/main'
+var DOCKERFILE_PATH = '${baseURL}/src/Dockerfile'
+//var DOCKERFILE_PATH = '${baseURL}/src/Dockerfile'
+var SOURCE_CODE_PATH = '${baseURL}/src/apiapp'
 
-// resource acrTask 'Microsoft.ContainerRegistry/registries/tasks@2019-04-01' = {
-//   parent: acrResource
-//   name: 'buildAndPushImageTask'
-//   location: location
-//   properties: {
-//     status: 'Enabled'
-//     platform: {
-//       os: 'Linux'
-//       architecture: 'amd64'
-//     }
-//     agentConfiguration: {
-//       cpu: 2
-//     }
-//     step: {
-//       type: 'Docker'
-//       contextPath: SOURCE_CODE_PATH
-//       dockerFilePath: DOCKERFILE_PATH
-//       imageNames: [
-//         '${acrResource.name}.azurecr.io/${dockerImageName}:${dockerImageTag}'
-//       ]
-//       isPushEnabled: true
-//       noCache: false
-//     }
-//     trigger: {
-//       sourceTriggers: []
-//       baseImageTrigger: {
-//         status: 'Enabled'
-//         name: 'baseImageTrigger'
-//         baseImageTriggerType: 'All'
-//       }
-//     }
-//   }
-// }
+resource acrTask 'Microsoft.ContainerRegistry/registries/tasks@2019-04-01' = {
+  parent: acrResource
+  name: 'buildAndPushImageTask'
+  location: location
+  properties: {
+    status: 'Enabled'
+    platform: {
+      os: 'Linux'
+      architecture: 'amd64'
+    }
+    agentConfiguration: {
+      cpu: 2
+    }
+    step: {
+      type: 'Docker'
+      contextPath: SOURCE_CODE_PATH
+      dockerFilePath: DOCKERFILE_PATH
+      imageNames: [
+        '${acrResource.name}.azurecr.io/${dockerImageName}:${dockerImageTag}'
+      ]
+      isPushEnabled: true
+      noCache: false
+    }
+    trigger: {
+      sourceTriggers: []
+      baseImageTrigger: {
+        status: 'Enabled'
+        name: 'baseImageTrigger'
+        baseImageTriggerType: 'All'
+      }
+    }
+  }
+}
 
-// resource acrTaskRun 'Microsoft.ContainerRegistry/registries/taskRuns@2019-06-01-preview' = {
-//   parent: acrResource
-//   name: 'buildAndPushTaskRun'
-//   location: location
-//   properties: {
-//     runRequest: {
-//       type: 'TaskRunRequest'
-//       taskId: acrTask.id
-//     }
-//   }
-// }
+resource acrTaskRun 'Microsoft.ContainerRegistry/registries/taskRuns@2019-06-01-preview' = {
+  parent: acrResource
+  name: 'buildAndPushTaskRun'
+  location: location
+  properties: {
+    runRequest: {
+      type: 'TaskRunRequest'
+      taskId: acrTask.id
+    }
+  }
+}
 
 
 
@@ -353,7 +354,7 @@ var dockerImageURL = '${acrResource.name}.azurecr.io/${dockerImageName}:${docker
 var testDockerImageURL = '${acrResource.name}.azurecr.io/${testImageName}:${testImageTag}'
 
 resource containerApps 'Microsoft.App/containerApps@2023-05-01' = {
-  name: '${resourcePrefix}cntrapp'
+  name: '${resourcePrefix}cntrapptest'
   location: location
   identity: {
     type: 'UserAssigned'
@@ -399,14 +400,23 @@ resource containerApps 'Microsoft.App/containerApps@2023-05-01' = {
       revisionSuffix: 'v1-${deploymentTimestamp}' // Generate a unique revision suffix using the current timestamp
       containers: [
         {
-          name: testImageName
-          image: testDockerImageURL
+          name: dockerImageName
+          image: dockerImageURL
           env: appEnvironVars
           resources: {
             cpu: 1
             memory: '2.0Gi'
           }
         }
+        // {
+        //   name: testImageName
+        //   image: testDockerImageURL
+        //   env: appEnvironVars
+        //   resources: {
+        //     cpu: 1
+        //     memory: '2.0Gi'
+        //   }
+        // }
         // {
         //   name: 'nginx'
         //   image: 'docker.io/library/nginx:latest'
@@ -416,15 +426,7 @@ resource containerApps 'Microsoft.App/containerApps@2023-05-01' = {
         //     memory: '2.0Gi'
         //   }
         // }
-        // {
-        //   name: dockerImageName
-        //   image: dockerImageURL
-        //   env: appEnvironVars
-        //   resources: {
-        //     cpu: 1
-        //     memory: '2.0Gi'
-        //   }
-        // }
+
       ]
     }
   }
