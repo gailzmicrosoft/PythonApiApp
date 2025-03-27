@@ -9,14 +9,15 @@ $sourceCodePath = "../../src"  # Path to your source code directory
 
 $imageFullName = "$acrName.azurecr.io/"+"$imageName"+":"+$imageTag
 
-# Log in to Azure
-az login
-
-# Log in to Azure Container Registry
-az acr login --name $acrName
 
 # Build the Docker image
 docker build -t $imageFullName -f $dockerfilePath $sourceCodePath
 
-# Push the Docker image to ACR
-docker push $imageFullName
+docker images
+
+docker inspect $imageFullName
+
+docker history $imageFullName
+
+docker run -it $imageFullName /bin/bash
+docker run -it $imageFullName /bin/bash -c "ls -l /app"

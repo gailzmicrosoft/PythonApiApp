@@ -6,6 +6,10 @@
 targetScope = 'resourceGroup'
 //targetScope = 'subscription'
 
+@description('Timestamp for generating unique revision suffix')
+param deploymentTimestamp string = utcNow('yyyyMMddHHmm')
+//param deploymentTimestamp string = utcNow('yyyyMMddHHmmss')
+
 @description('Prefix to use for all resources.')
 param resourcePrefixUser string = 'gztemp' // gzpython used in gaiye-python-app-rg
 
@@ -47,49 +51,70 @@ resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-
   location: location
 }
 
-// Assign the owner role to the managed identity
+// // Assign the owner role to the managed identity
+// @description('This allows the managed identity of the container app to access the resource group')
+// resource assignMidOwnerRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+//   name: guid(resourceGroup().id, managedIdentity.id, ownerRole)
+//   properties: {
+//     roleDefinitionId: ownerRole
+//     principalId: managedIdentity.properties.principalId
+//     principalType: 'ServicePrincipal'
+//   }
+// }
+
+// // Assign the blob storage data contributor role to the managed identity
+// @description('This allows the managed identity of the container app to access the storage account')
+// resource assignMidToStorageDataContributorRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+//   name: guid(resourceGroup().id, managedIdentity.id, blobDataContributorRole)
+//   properties: {
+//     roleDefinitionId: blobDataContributorRole
+//     principalId: managedIdentity.properties.principalId
+//     principalType: 'ServicePrincipal'
+//   }
+// }
+
+
+// // Assign the AcrPull role to the managed identity
+// @description('This allows the managed identity of the container app to access the registry, note scope is applied to the wider ResourceGroup not the ACR')
+// resource assignMidToAcrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+//   name: guid(resourceGroup().id, managedIdentity.id, acrPullRole)
+//   properties: {
+//     roleDefinitionId: acrPullRole
+//     principalId: managedIdentity.properties.principalId
+//     principalType: 'ServicePrincipal'
+//   }
+// }
+
+// // Assign the AcrPush role to the managed identity
+// @description('This allows the managed identity of the container app to access the registry, note scope is applied to the wider ResourceGroup not the ACR')
+// resource assignMidToAcrPushRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+//   name: guid(resourceGroup().id, managedIdentity.id, acrPushRole)
+//   properties: {
+//     roleDefinitionId: acrPushRole
+//     principalId: managedIdentity.properties.principalId
+//     principalType: 'ServicePrincipal'
+//   }
+// }
+
+//***************************************************************************/
+// Use Below code if are reusing prior deployments 
+/***************************************************************************/
 @description('This allows the managed identity of the container app to access the resource group')
-resource assignMidOwnerRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource assignMidOwnerRole 'Microsoft.Authorization/roleAssignments@2022-04-01' existing = {
   name: guid(resourceGroup().id, managedIdentity.id, ownerRole)
-  properties: {
-    roleDefinitionId: ownerRole
-    principalId: managedIdentity.properties.principalId
-    principalType: 'ServicePrincipal'
-  }
 }
-
-// Assign the blob storage data contributor role to the managed identity
 @description('This allows the managed identity of the container app to access the storage account')
-resource assignMidToStorageDataContributorRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource assignMidToStorageDataContributorRole 'Microsoft.Authorization/roleAssignments@2022-04-01' existing = {
   name: guid(resourceGroup().id, managedIdentity.id, blobDataContributorRole)
-  properties: {
-    roleDefinitionId: blobDataContributorRole
-    principalId: managedIdentity.properties.principalId
-    principalType: 'ServicePrincipal'
-  }
 }
-
-
-// Assign the AcrPull role to the managed identity
 @description('This allows the managed identity of the container app to access the registry, note scope is applied to the wider ResourceGroup not the ACR')
-resource assignMidToAcrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource assignMidToAcrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' existing = {
   name: guid(resourceGroup().id, managedIdentity.id, acrPullRole)
-  properties: {
-    roleDefinitionId: acrPullRole
-    principalId: managedIdentity.properties.principalId
-    principalType: 'ServicePrincipal'
-  }
 }
 
-// Assign the AcrPush role to the managed identity
 @description('This allows the managed identity of the container app to access the registry, note scope is applied to the wider ResourceGroup not the ACR')
-resource assignMidToAcrPushRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource assignMidToAcrPushRole 'Microsoft.Authorization/roleAssignments@2022-04-01' existing = {
   name: guid(resourceGroup().id, managedIdentity.id, acrPushRole)
-  properties: {
-    roleDefinitionId: acrPushRole
-    principalId: managedIdentity.properties.principalId
-    principalType: 'ServicePrincipal'
-  }
 }
 
 
@@ -201,14 +226,13 @@ resource kvsAcrUsername 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
     value: acrName
   }
 }
-// This one has issues 
-// resource kvsAcrPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
-//   parent: keyVault
-//   name: 'acr-password'
-//   properties: {
-//     value: acrResource.listCredentials().passwords[0].value
-//   }
-// }
+resource kvsAcrPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: 'acr-password'
+  properties: {
+    value: acrResource.listCredentials().passwords[0].value
+  }
+}
 
 
 
@@ -307,104 +331,101 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-03-01'
 // Some environment variables for the container app
 /**************************************************************************/
 
-// var appEnvironVars = [
-//   {
-//     name: 'KEY_VAULT_URI'
-//     value: keyVault.properties.vaultUri
-//   }
-//   {
-//     name: 'APPLICATIONINSIGHTS_INSTRUMENTATION_KEY'
-//     value: applicationInsights.properties.ConnectionString
-//   }
-// ]
+var appEnvironVars = [
+  {
+    name: 'KEY_VAULT_URI'
+    value: keyVault.properties.vaultUri
+  }
+  {
+    name: 'APPLICATIONINSIGHTS_INSTRUMENTATION_KEY'
+    value: applicationInsights.properties.ConnectionString
+  }
+]
 
 
 
-// // test images
-// var testImageName = 'pythonapiapp'
-// //var testImageURL = 'docker.io/library/nginx:latest'
-// var dockerImageURL = '${acrResource.name}.azurecr.io/${dockerImageName}:${dockerImageTag}'
-// var testDockerImageURL = '${acrResource.name}.azurecr.io/${testImageName}:${dockerImageTag}'
+// test images
+var testImageName = 'pythonapiapptemp'
+var testImageTag = 'latest' // This image must be built and pushed to the container registry already
+//var testImageURL = 'docker.io/library/nginx:latest'
+var acrServerFQN = '${acrResource.name}.azurecr.io'
+var dockerImageURL = '${acrResource.name}.azurecr.io/${dockerImageName}:${dockerImageTag}'
+var testDockerImageURL = '${acrResource.name}.azurecr.io/${testImageName}:${testImageTag}'
 
-// resource containerApps 'Microsoft.App/containerApps@2023-05-01' = {
-//   name: '${resourcePrefix}containerapp'
-//   location: location
-//   identity: {
-//     type: 'UserAssigned'
-//     userAssignedIdentities: {
-//       '${managedIdentity.id}' : {}
-//     }
-//   }
-//   properties: {
-//     environmentId: containerAppsEnvironment.id
-//     configuration: {
-//       secrets: [
-//         {
-//           name: 'keyvault-uri'
-//           value: keyVault.properties.vaultUri
-//         }
-//         {
-//           name: 'acr-username'
-//           value: kvsAcrUsername.properties.secretUriWithVersion
-//         }
-//         {
-//           name: 'acr-password'
-//           value: kvsAcrPassword.properties.secretUriWithVersion
-//         }
-//         {
-//           name: 'x-api-key'
-//           value: kvsApiKey.properties.secretUriWithVersion
-//         }
-//       ]
-//       ingress: {
-//         external: true
-//         targetPort: 80
-//         traffic: [
-//           {
-//             latestRevision: true
-//             weight: 100
-//           }
-//         ]
-//       }
-//       registries: [
-//         {
-//           server: acrResource.properties.loginServer
-//           username: kvsAcrUsername.properties.secretUriWithVersion
-//           passwordSecretRef: 'acr-password'
-//         }
-//       ]
-//     }
-//     template: {
-//       revisionSuffix: 'v1'
-//       containers: [
-//         {
-//           name: 'nginx'
-//           image: 'docker.io/library/nginx:latest'
-//           env: appEnvironVars
-//           resources: {
-//             cpu: 1
-//             memory: '2.0Gi'
-//           }
-//         }
-//         // {
-//         //   name: testImageName
-//         //   image: testDockerImageURL
-//         //   env: appEnvironVars
-//         //   resources: {
-//         //     cpu: 1
-//         //     memory: '2.0Gi'
-//         //   }
-//         // }
-//         // {
-//         //   name: dockerImageName
-//         //   image: dockerImageURL
-//         //   env: appEnvironVars
-//         //   resources: {
-//         //     cpu: 1
-//         //     memory: '2.0Gi'
-//         //   }
-//         // }
-//       ]
-//     }
-//   }
-// }
+resource containerApps 'Microsoft.App/containerApps@2023-05-01' = {
+  name: '${resourcePrefix}cntrapp'
+  location: location
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${managedIdentity.id}' : {}
+    }
+  }
+  properties: {
+    environmentId: containerAppsEnvironment.id
+    configuration: {
+      secrets: [
+        {
+          name: 'keyvault-uri'
+          value: keyVault.properties.vaultUri
+        }
+        {
+          name: 'x-api-key'
+          value: kvsApiKey.properties.secretUriWithVersion
+        }
+      ]
+      ingress: {
+        external: true
+        targetPort: 8080
+        traffic: [
+          {
+            latestRevision: true
+            weight: 100
+          }
+        ]
+      }
+      registries: [
+        {
+          server: acrServerFQN
+          identity: managedIdentity.id
+          // Username and passsword are not needed if using managed identity
+          // username: kvsAcrUsername.properties.value
+          // passwordSecretRef: 'acr-password'
+        }
+      ]
+    }
+    template: {
+      //revisionMode: 'Multiple'
+      revisionSuffix: 'v1-${deploymentTimestamp}' // Generate a unique revision suffix using the current timestamp
+      containers: [
+        {
+          name: testImageName
+          image: testDockerImageURL
+          env: appEnvironVars
+          resources: {
+            cpu: 1
+            memory: '2.0Gi'
+          }
+        }
+        // {
+        //   name: 'nginx'
+        //   image: 'docker.io/library/nginx:latest'
+        //   env: appEnvironVars
+        //   resources: {
+        //     cpu: 1
+        //     memory: '2.0Gi'
+        //   }
+        // }
+        // {
+        //   name: dockerImageName
+        //   image: dockerImageURL
+        //   env: appEnvironVars
+        //   resources: {
+        //     cpu: 1
+        //     memory: '2.0Gi'
+        //   }
+        // }
+      ]
+    }
+  }
+}

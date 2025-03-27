@@ -1,8 +1,12 @@
+# Exclude virtual environments
+.venv
+.env
+
+# Exclude Python cache files
 __pycache__
 *.pyc
 *.pyo
 *.pyd
 *.db
 *.sqlite3
-.env
 .git
