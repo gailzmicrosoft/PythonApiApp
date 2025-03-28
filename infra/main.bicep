@@ -11,7 +11,7 @@ param deploymentTimestamp string = utcNow('yyyyMMddHHmm')
 //param deploymentTimestamp string = utcNow('yyyyMMddHHmmss')
 
 @description('Prefix to use for all resources.')
-param resourcePrefixUser string = 'gz328' // 
+param resourcePrefixUser string = 'gzbicep' // 
 
 @description('Deployment Location')
 param location string = 'eastus2'
@@ -21,6 +21,10 @@ param xapikey string = 'PythonApiKey'
 
 @description('PostgreSQL Server Admin Login')
 param postgreServerAdminLogin string = 'ChatbotAdmin'
+
+@description('PostgreSQL Server Admin Password')
+@secure()
+param postgreServerAdminPassword string = 'ChatbotAdminPassword123!' // This should be stored in Key Vault
 
 
 /**************************************************************************/
@@ -53,6 +57,8 @@ resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-
   name: miName
   location: location
 }
+
+output midObjectId string = managedIdentity.properties.principalId
 
 // Assign the owner role to the managed identity
 @description('This allows the managed identity of the container app to access the resource group')
@@ -211,7 +217,7 @@ resource postgreSqlServer 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01'
   properties: {
     version: '11' // 11, 12, 13, 14
     administratorLogin: postgreServerAdminLogin
-    administratorLoginPassword: 'InitialLogin_password_to_be_changed_12345!'
+    administratorLoginPassword: postgreServerAdminPassword // This should be stored in Key Vault
     authConfig: {
       tenantId: subscription().tenantId
       activeDirectoryAuth: 'Enabled'
@@ -234,6 +240,7 @@ resource postgreSqlServer 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01'
   }
 }
 
+
 resource waitForPostgreSqlServerScript 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
   name: 'waitForPostgreSqlServerReady'
   location: resourceGroup().location
@@ -248,6 +255,34 @@ resource waitForPostgreSqlServerScript 'Microsoft.Resources/deploymentScripts@20
     postgreSqlServer
   ]
 }
+
+resource postgresConfigurations 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2024-08-01' = {
+  name: 'azure.extensions'
+  parent: postgreSqlServer
+  properties: {
+    value: 'vector'
+    source: 'user-override'
+  }
+  dependsOn: [
+    waitForPostgreSqlServerScript
+  ]
+}
+
+// This has not worked yet
+// resource azureADAdministrator 'Microsoft.DBforPostgreSQL/flexibleServers/administrators@2024-08-01' = {
+//   parent: postgreSqlServer
+//   name: managedIdentity.properties.principalId
+//   properties: {
+//     principalType: 'SERVICEPRINCIPAL'
+//     principalName: managedIdentity.name
+//     principalId: managedIdentity.properties.principalId
+//     tenantId: subscription().tenantId
+//   }
+//   dependsOn: [
+//     postgresConfigurations
+//   ]
+// }
+
 
 resource kvsPostgreSqlServerName 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
   parent: keyVault
@@ -273,35 +308,24 @@ resource kvsPostgreSqlDbName 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
   }
 }
 
+resource kvsPostgreSqlAdminLogin 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: 'postgresql-admin-login'
+  properties: {
+    value: postgreServerAdminLogin
+  }
+}
+
+resource kvsPostgreSqlAdminPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: 'postgresql-addmin-password'
+  properties: {
+    value: postgreServerAdminPassword
+  }
+}
 
 
-var baseUrl = 'https://raw.githubusercontent.com/gailzmicrosoft/PythonApiApp/main/'
 
-var postgresSqlServerHost = '${postreSQLServerName}.postgres.database.azure.com'
-var dbName = 'postgres'
-var keyVaultName = keyVault.name
-
-var myArguments= '${baseUrl} ${resourceGroup().name} ${keyVaultName} ${postreSQLServerName} ${postgresSqlServerHost} ${dbName} ${postgreServerAdminLogin} ${managedIdentity.name}'
-
-
-// resource createPostgreSqlTables 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
-//   kind:'AzureCLI'
-//   name: 'runPythonWithBashScriptCreateTables'
-//   location: location // Replace with your desired location
-//   identity: {
-//     type: 'UserAssigned'
-//     userAssignedIdentities: {
-//       '${managedIdentity.id}' : {}
-//     }
-//   }
-//   properties: {
-//     azCliVersion: '2.52.0'
-//     primaryScriptUri: '${baseUrl}infra/scripts/run_python_create_tables_script.sh'
-//     arguments: myArguments
-//     retentionInterval: 'PT1H' // Specify the desired retention interval
-//     cleanupPreference:'OnSuccess'
-//   }
-// }
 
 
 /**************************************************************************/
@@ -427,22 +451,6 @@ resource acrTaskRun 'Microsoft.ContainerRegistry/registries/taskRuns@2019-06-01-
     }
   }
 }
-// Wait for the ACR Task Run to complete
-resource waitForTaskRunDockerImageReady'Microsoft.Resources/deploymentScripts@2020-10-01' = {
-  name: 'waitForDockerImageReady'
-  location: resourceGroup().location
-  kind: 'AzurePowerShell'
-  properties: {
-    azPowerShellVersion: '3.0'
-    scriptContent: 'start-sleep -Seconds 600'
-    cleanupPreference: 'Always'
-    retentionInterval: 'PT1H'
-  }
-  dependsOn: [
-    acrTaskRun
-  ]
-}
-
 
 
 /**************************************************************************/
@@ -476,7 +484,7 @@ var appEnvironVars = [
   }
   {
     name: 'POSTGRESQL_DB_NAME'
-    value: dbName
+    value: 'postgres'
   }
   {
     name: 'APPLICATIONINSIGHTS_INSTRUMENTATION_KEY'
@@ -551,4 +559,30 @@ resource containerApps 'Microsoft.App/containerApps@2023-05-01' = {
   dependsOn: [
     acrTaskRun // Ensure the container app waits for the ACR Task Run to complete
   ]
+}
+
+
+
+/**************************************************************************/
+// Create PostgreSQL tables 
+/**************************************************************************/
+var baseUrl = 'https://raw.githubusercontent.com/gailzmicrosoft/PythonApiApp/main/'
+var arguments= '${baseUrl} ${resourceGroup().name} ${keyVault.name} ${postreSQLServerName}'
+resource createPostgreSqlTables 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
+  kind:'AzureCLI'
+  name: 'BashPythonCreateTablesScripts'
+  location: location // Replace with your desired location
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${managedIdentity.id}' : {}
+    }
+  }
+  properties: {
+    azCliVersion: '2.52.0' // '2.52.0'
+    primaryScriptUri: '${baseUrl}infra/scripts/python_create_tables_script.sh'
+    arguments: arguments
+    retentionInterval: 'PT1H' // Specify the desired retention interval
+    cleanupPreference:'OnSuccess'
+  }
 }

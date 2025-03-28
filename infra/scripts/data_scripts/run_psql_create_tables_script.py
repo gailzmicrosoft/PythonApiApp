@@ -2,12 +2,17 @@
 from azure.identity import DefaultAzureCredential
 import psycopg2
 from psycopg2 import sql
+import logging
 
 key_vault_name = "key_vault_name_place_holder"
 host_name = "host_name_place_holder"
 admin_principal_name = "admin_principal_name_place_holder"
 identity_name = "identity_name_place_holder"
 database_name= "database_name_place_holder"
+
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.StreamHandler(sys.stdout)])
 
 
 # Grant Permission Function
