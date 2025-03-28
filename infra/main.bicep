@@ -11,7 +11,7 @@ param deploymentTimestamp string = utcNow('yyyyMMddHHmm')
 //param deploymentTimestamp string = utcNow('yyyyMMddHHmmss')
 
 @description('Prefix to use for all resources.')
-param resourcePrefixUser string = 'gailz' // 
+param resourcePrefixUser string = 'gz328' // 
 
 @description('Deployment Location')
 param location string = 'eastus2'
@@ -205,7 +205,7 @@ resource postgreSqlServer 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01'
     }
   }
   sku: {
-    name: 'Standard_B1ms'
+    name: 'Standard_B4ms' // available SKUs: B1ms, B2ms, B4ms, B8ms, B16ms
     tier: 'Burstable'
   }
   properties: {
@@ -232,6 +232,21 @@ resource postgreSqlServer 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01'
     }
     availabilityZone: '1' // Not all tiers support it. set to '' for 'Standard_B1ms' may work
   }
+}
+
+resource waitForPostgreSqlServerScript 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
+  name: 'waitForPostgreSqlServerReady'
+  location: resourceGroup().location
+  kind: 'AzurePowerShell'
+  properties: {
+    azPowerShellVersion: '3.0'
+    scriptContent: 'start-sleep -Seconds 300'
+    cleanupPreference: 'Always'
+    retentionInterval: 'PT1H'
+  }
+  dependsOn: [
+    postgreSqlServer
+  ]
 }
 
 resource kvsPostgreSqlServerName 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
@@ -269,25 +284,24 @@ var keyVaultName = keyVault.name
 var myArguments= '${baseUrl} ${resourceGroup().name} ${keyVaultName} ${postreSQLServerName} ${postgresSqlServerHost} ${dbName} ${postgreServerAdminLogin} ${managedIdentity.name}'
 
 
-resource createPostgreSqlTables 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
-  kind:'AzureCLI'
-  name: 'runPythonWithBashScriptCreateTables'
-  location: location // Replace with your desired location
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      //'${managedIdentity.name}' : {}
-      '${managedIdentity.id}' : {}
-    }
-  }
-  properties: {
-    azCliVersion: '2.52.0'
-    primaryScriptUri: '${baseUrl}infra/scripts/run_python_create_tables_script.sh'
-    arguments: myArguments
-    retentionInterval: 'PT1H' // Specify the desired retention interval
-    cleanupPreference:'OnSuccess'
-  }
-}
+// resource createPostgreSqlTables 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
+//   kind:'AzureCLI'
+//   name: 'runPythonWithBashScriptCreateTables'
+//   location: location // Replace with your desired location
+//   identity: {
+//     type: 'UserAssigned'
+//     userAssignedIdentities: {
+//       '${managedIdentity.id}' : {}
+//     }
+//   }
+//   properties: {
+//     azCliVersion: '2.52.0'
+//     primaryScriptUri: '${baseUrl}infra/scripts/run_python_create_tables_script.sh'
+//     arguments: myArguments
+//     retentionInterval: 'PT1H' // Specify the desired retention interval
+//     cleanupPreference:'OnSuccess'
+//   }
+// }
 
 
 /**************************************************************************/
@@ -413,7 +427,21 @@ resource acrTaskRun 'Microsoft.ContainerRegistry/registries/taskRuns@2019-06-01-
     }
   }
 }
-
+// Wait for the ACR Task Run to complete
+resource waitForTaskRunDockerImageReady'Microsoft.Resources/deploymentScripts@2020-10-01' = {
+  name: 'waitForDockerImageReady'
+  location: resourceGroup().location
+  kind: 'AzurePowerShell'
+  properties: {
+    azPowerShellVersion: '3.0'
+    scriptContent: 'start-sleep -Seconds 600'
+    cleanupPreference: 'Always'
+    retentionInterval: 'PT1H'
+  }
+  dependsOn: [
+    acrTaskRun
+  ]
+}
 
 
 
@@ -425,6 +453,30 @@ var appEnvironVars = [
   {
     name: 'KEY_VAULT_URI'
     value: keyVault.properties.vaultUri
+  }
+  {
+    name: 'MID_NAME'
+    value: managedIdentity.name
+  }
+  {
+    name: 'MID_ID'
+    value: managedIdentity.id
+  }
+  {
+    name: 'AZURE_STORAGE_ACCOUNT_NAME'
+    value: storageAccount.name
+  }
+  {
+    name: 'POSTGRESQL_SERVER_NAME'
+    value: postreSQLServerName
+  }
+  {
+    name: 'POSTGRESQL_SERVER_HOST'
+    value: '${postreSQLServerName}.postgres.database.azure.com'
+  }
+  {
+    name: 'POSTGRESQL_DB_NAME'
+    value: dbName
   }
   {
     name: 'APPLICATIONINSIGHTS_INSTRUMENTATION_KEY'
