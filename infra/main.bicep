@@ -198,6 +198,12 @@ resource kvsApiKey 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
 resource postgreSqlServer 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
   name: postreSQLServerName
   location: location
+  identity: {
+    type: 'SystemAssigned, UserAssigned' // Enable both System-Assigned and User-Assigned Managed Identities
+    userAssignedIdentities: {
+      '${managedIdentity.id}': {} // Reference the User-Assigned Managed Identity
+    }
+  }
   sku: {
     name: 'Standard_B1ms'
     tier: 'Burstable'
