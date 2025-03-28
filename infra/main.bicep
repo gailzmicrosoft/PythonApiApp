@@ -263,25 +263,25 @@ var keyVaultName = keyVault.name
 var myArguments= '${baseUrl} ${resourceGroup().name} ${keyVaultName} ${postreSQLServerName} ${postgresSqlServerHost} ${dbName} ${postgreServerAdminLogin} ${managedIdentity.name}'
 
 
-// resource create_index_create_tables 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
-//   kind:'AzureCLI'
-//   name: 'runPythonWithBashScriptCreateTables'
-//   location: location // Replace with your desired location
-//   identity: {
-//     type: 'UserAssigned'
-//     userAssignedIdentities: {
-//       '${managedIdentity.name}' : {}
-//       //'${managedIdentity.id}' : {}
-//     }
-//   }
-//   properties: {
-//     azCliVersion: '2.52.0'
-//     primaryScriptUri: '${baseUrl}infra/scripts/run_python_create_tables_script.sh'
-//     arguments: myArguments
-//     retentionInterval: 'PT1H' // Specify the desired retention interval
-//     cleanupPreference:'OnSuccess'
-//   }
-// }
+resource createPostgreSqlTables 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
+  kind:'AzureCLI'
+  name: 'runPythonWithBashScriptCreateTables'
+  location: location // Replace with your desired location
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      //'${managedIdentity.name}' : {}
+      '${managedIdentity.id}' : {}
+    }
+  }
+  properties: {
+    azCliVersion: '2.52.0'
+    primaryScriptUri: '${baseUrl}infra/scripts/run_python_create_tables_script.sh'
+    arguments: myArguments
+    retentionInterval: 'PT1H' // Specify the desired retention interval
+    cleanupPreference:'OnSuccess'
+  }
+}
 
 
 /**************************************************************************/

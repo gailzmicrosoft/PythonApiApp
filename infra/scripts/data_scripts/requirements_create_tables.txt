@@ -1,4 +1,4 @@
 #required for run_psql_create_tables_script.py only
 psycopg2-binary==2.9.10
 azure-identity==1.19.0
-azure-keyvault-secrets==4.9.0
+azure-keyvault-secrets==4.7.0
