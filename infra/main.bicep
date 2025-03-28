@@ -427,7 +427,7 @@ var appEnvironVars = [
 ]
 
 resource containerApps 'Microsoft.App/containerApps@2023-05-01' = {
-  name: '${resourcePrefix}cntrapptest'
+  name: '${resourcePrefix}cntrapp'
   location: location
   identity: {
     type: 'UserAssigned'
