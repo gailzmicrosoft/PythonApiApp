@@ -11,27 +11,29 @@ param deploymentTimestamp string = utcNow('yyyyMMddHHmm')
 //param deploymentTimestamp string = utcNow('yyyyMMddHHmmss')
 
 @description('Prefix to use for all resources.')
-param resourcePrefixUser string = 'gztemp' // gzpython used in gaiye-python-app-rg
+param resourcePrefixUser string = 'gzautomation' // 
 
 @description('Deployment Location')
 param location string = 'eastus2'
 
-@description('Name of the resource group to be used')
-param rgName string ='gaiye-test-rg'
-
 @description('Initial valye of the x-api-key for REST API calls')
 param xapikey string = 'PythonApiKey'
+
+@description('PostgreSQL Server Admin Login')
+param postgreServerAdminLogin string = 'ChatbotAdmin'
+
 
 /**************************************************************************/
 // Resource name generation section
 /**************************************************************************/
-var resourceTokenRaw = toLower(uniqueString(subscription().id, rgName, resourcePrefixUser))
-var trimmedToken = length(resourceTokenRaw) > 8 ? substring(resourceTokenRaw, 0, 8) : resourceTokenRaw
+var resourceTokenRaw = toLower(uniqueString(subscription().id, resourceGroup().name, resourcePrefixUser))
+var trimmedToken = length(resourceTokenRaw) > 5 ? substring(resourceTokenRaw, 0, 5) : resourceTokenRaw
 var resourcePrefixRaw = '${resourcePrefixUser}${trimmedToken}'
 var resourcePrefix =toLower(replace(resourcePrefixRaw, '_', ''))
 
 var miName = '${resourcePrefix}MiD'
 var acrName = '${resourcePrefix}azurecr'
+var postreSQLServerName = '${resourcePrefix}pgserver'
 
 
 var dockerImageName = 'chatbotapp' // This image must be built and pushed to the container registry already
@@ -125,6 +127,22 @@ resource keyVault 'Microsoft.KeyVault/vaults@2022-11-01' = {
 
 
 
+resource kvsManagedIdentityName 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: 'mid-name'
+  properties: {
+    value: managedIdentity.name
+  }
+}
+
+resource kvsManagedIdentityId 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: 'mid-id'
+  properties: {
+    value: managedIdentity.id
+  }
+}
+
 /**************************************************************************/
 // Create a storage account and a container
 /**************************************************************************/
@@ -167,6 +185,97 @@ resource kvsApiKey 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
   name: 'x-api-key'
   properties: {
     value: xapikey
+  }
+}
+
+/**************************************************************************/
+// create azure postgres database resources 
+/**************************************************************************/
+// postgres db is automatically created when the flexible server is created
+resource postgreSqlServer 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
+  name: postreSQLServerName
+  location: location
+  sku: {
+    name: 'Standard_B1ms'
+    tier: 'Burstable'
+  }
+  properties: {
+    version: '11' // 11, 12, 13, 14
+    administratorLogin: postgreServerAdminLogin
+    administratorLoginPassword: 'InitialLogin_password_to_be_changed_12345!'
+    authConfig: {
+      tenantId: subscription().tenantId
+      activeDirectoryAuth: 'Enabled'
+      passwordAuth: 'Enabled'
+    }
+    highAvailability: {
+      mode: 'Disabled'
+    }
+    storage: {
+      storageSizeGB: 32
+    }
+    backup: {
+      backupRetentionDays: 7
+      geoRedundantBackup: 'Disabled'
+    }
+    network: {
+      publicNetworkAccess: 'Enabled'
+    }
+    availabilityZone: '1' // Not all tiers support it. set to '' for 'Standard_B1ms' may work
+  }
+}
+
+resource kvsPostgreSqlServerName 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: 'postgresql-server-name'
+  properties: {
+    value: postreSQLServerName
+  }
+}
+
+resource kvsPostgreSqlServerEndPoint'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: 'postgresql-server-end-point'
+  properties: {
+    value: '${postreSQLServerName}.postgres.database.azure.com'
+  }
+}
+
+resource kvsPostgreSqlDbName 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+  parent: keyVault
+  name: 'postgresql-db-name'
+  properties: {
+    value: 'postgres'
+  }
+}
+
+
+
+var baseUrl = 'https://raw.githubusercontent.com/gailzmicrosoft/PythonApiApp/main/'
+
+var postgresSqlServerHost = '${postreSQLServerName}.postgres.database.azure.com'
+var dbName = 'postgres'
+var keyVaultName = keyVault.name
+
+var myArguments= '${baseUrl} ${resourceGroup().name} ${keyVaultName} ${postreSQLServerName} ${postgresSqlServerHost} ${dbName} ${postgreServerAdminLogin} ${managedIdentity.name}'
+
+
+resource create_index_create_tables 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
+  kind:'AzureCLI'
+  name: 'runPythonWithBashScriptCreateTables'
+  location: location // Replace with your desired location
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${managedIdentity.name}' : {}
+    }
+  }
+  properties: {
+    azCliVersion: '2.52.0'
+    primaryScriptUri: '${baseUrl}infra/scripts/run_python_create_tables_script.sh'
+    arguments: myArguments
+    retentionInterval: 'PT1H' // Specify the desired retention interval
+    cleanupPreference:'OnSuccess'
   }
 }
 
@@ -272,8 +381,6 @@ resource acrTask 'Microsoft.ContainerRegistry/registries/tasks@2019-04-01' = {
     }
     step: {
       type: 'Docker'
-      //contextPath: repoURL
-      //contextPath: baseURL
       contextPath: contextPath
       dockerFilePath: dockerFilePath
       imageNames: [

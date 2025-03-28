@@ -1,0 +1,5 @@
+psycopg2-binary==2.9.10
+azure-identity==1.19.0
+azure-keyvault-secrets==4.7.0
+pandas==2.2.2 #1.5.3 with numpy 2.2.4 not worked with python code
+#numpy==2.2.4 # automatically installed by pandas 2.2.2

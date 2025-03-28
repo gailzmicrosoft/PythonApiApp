@@ -1,25 +1,39 @@
 import os
 import datetime
-from flask import Flask, request, jsonify, render_template, redirect, url_for
+from flask import Flask, request, jsonify, render_template
 from functools import wraps
+from azure.identity import DefaultAzureCredential
+from azure.keyvault.secrets import SecretClient
 
 app = Flask(__name__)
 
-# Replace 'SERVER_API_KEY' with your actual environment variable name
-# This was set using a command like: export SERVER_API_KEY / $Env:SERVER_API_KEY="YourApiKeySample"
-# Check the environment variable for the API key: echo $SERVER_API_KEY
-# test this code by running: python app.py or use the command: python -m flask run 
-# The test as a client in a terminal: curl -H "x-api-key:YourApiKeySample" http://localhost:8080/
+# Retrieve the Key Vault URI from the environment variable
+key_vault_uri = os.environ.get("KEY_VAULT_URI'")
+if not key_vault_uri:
+    raise Exception("KEY_VAULT_URI environment variable is not set")
 
-#SECRET_API_KEY = os.environ.get("SERVER_API_KEY").strip()
+print(f"Key Vault URI: {key_vault_uri}")
 
-# just for testing 
-SECRET_API_KEY = "TestKey"
+# Initialize Azure Key Vault client
+credential = DefaultAzureCredential()
+secret_client = SecretClient(vault_url=key_vault_uri, credential=credential)
 
-#curl -H "x-api-key:TestKey" http://localhost:8080/
+# Retrieve the secret value for x-api-key from Azure Key Vault
+try:
+    SECRET_API_KEY = secret_client.get_secret('x-api-key').value
+    managed_identity_name = secret_client.get_secret('mid-name').value
+    managed_identity_id = secret_client.get_secret('mid-id').value
 
-print(f"Server Side Key set to: {SECRET_API_KEY}")  # Debugging line
 
+    print(f"Secret '{secret_name}' retrieved successfully.")
+
+
+    print(f"Retrieved secret '{secret_name}' from Key Vault.")
+except Exception as e:
+    raise Exception(f"Failed to retrieve secret '{secret_name}' from Key Vault: {e}")
+
+
+# Decorator to require API key
 def require_api_key(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -41,8 +55,6 @@ def check_orders():
     order_date = request.args.get("order_date")
     comments = request.args.get("comments")
   
-    # For demonstration purposes, we'll just return the received data
-    # In a real application, you would query your database or perform other logic here
     return jsonify({
         "message": "check_order request received",
         "first_name": first_name,
@@ -56,12 +68,8 @@ def check_orders():
 def hello():
     today = datetime.datetime.now()
     formatted_date = today.strftime("%Y-%m-%d %H:%M:%S")
-    print(f"Current date and time: {formatted_date}")
-    return render_template("index.html", current_date=formatted_date)
-
-@app.route("/check_orders_form")
-def check_orders_form():
-    return render_template("check_orders.html")
+    message = f"Welcome to the REST API App. Current date and time is: {formatted_date}"
+    return (josonfy({"message": message}))
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8080)
