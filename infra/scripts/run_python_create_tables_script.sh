@@ -23,7 +23,7 @@ publicIp=$(curl -s https://api.ipify.org)
 # Use Azure CLI to add the public IP to the PostgreSQL firewall rule
 az postgres flexible-server firewall-rule create --resource-group $resourceGroup --name $postgres_server_name --rule-name "AllowScriptIp" --start-ip-address "$publicIp" --end-ip-address "$publicIp"
 
-curl --output "run_psql_create_tables_script.py" ${baseUrl}"scripts/data_scripts/run_psql_create_tables_script.py"
+curl --output "run_psql_create_tables_script.py" ${baseUrl}"infra/scripts/data_scripts/run_psql_create_tables_script.py"
 
 # Download the requirement file
 curl --output "$requirementFile" "$requirementFileUrl"

@@ -11,7 +11,7 @@ param deploymentTimestamp string = utcNow('yyyyMMddHHmm')
 //param deploymentTimestamp string = utcNow('yyyyMMddHHmmss')
 
 @description('Prefix to use for all resources.')
-param resourcePrefixUser string = 'gzautomation' // 
+param resourcePrefixUser string = 'gailz' // 
 
 @description('Deployment Location')
 param location string = 'eastus2'
@@ -27,9 +27,10 @@ param postgreServerAdminLogin string = 'ChatbotAdmin'
 // Resource name generation section
 /**************************************************************************/
 var resourceTokenRaw = toLower(uniqueString(subscription().id, resourceGroup().name, resourcePrefixUser))
-var trimmedToken = length(resourceTokenRaw) > 5 ? substring(resourceTokenRaw, 0, 5) : resourceTokenRaw
+var trimmedToken = length(resourceTokenRaw) > 4 ? substring(resourceTokenRaw, 0, 4) : resourceTokenRaw
 var resourcePrefixRaw = '${resourcePrefixUser}${trimmedToken}'
-var resourcePrefix =toLower(replace(resourcePrefixRaw, '_', ''))
+var resourcePrefixLong =toLower(replace(resourcePrefixRaw, '_', ''))
+var resourcePrefix = length(resourcePrefixLong) > 8 ? substring(resourcePrefixLong, 0, 8) : resourcePrefixLong
 
 var miName = '${resourcePrefix}MiD'
 var acrName = '${resourcePrefix}azurecr'
@@ -97,12 +98,14 @@ resource assignMidToAcrPushRole 'Microsoft.Authorization/roleAssignments@2022-04
     principalType: 'ServicePrincipal'
   }
 }
+output managedIdentityId string = managedIdentity.id
+output managedIdentityName string = managedIdentity.name
 
 /**************************************************************************/
 // Create a Key Vault
 /**************************************************************************/
 resource keyVault 'Microsoft.KeyVault/vaults@2022-11-01' = {
-  name: '${resourcePrefix}KeyVault'
+  name: '${resourcePrefix}KV'
   location: location
   properties: {
     sku: {
@@ -260,24 +263,25 @@ var keyVaultName = keyVault.name
 var myArguments= '${baseUrl} ${resourceGroup().name} ${keyVaultName} ${postreSQLServerName} ${postgresSqlServerHost} ${dbName} ${postgreServerAdminLogin} ${managedIdentity.name}'
 
 
-resource create_index_create_tables 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
-  kind:'AzureCLI'
-  name: 'runPythonWithBashScriptCreateTables'
-  location: location // Replace with your desired location
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${managedIdentity.name}' : {}
-    }
-  }
-  properties: {
-    azCliVersion: '2.52.0'
-    primaryScriptUri: '${baseUrl}infra/scripts/run_python_create_tables_script.sh'
-    arguments: myArguments
-    retentionInterval: 'PT1H' // Specify the desired retention interval
-    cleanupPreference:'OnSuccess'
-  }
-}
+// resource create_index_create_tables 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
+//   kind:'AzureCLI'
+//   name: 'runPythonWithBashScriptCreateTables'
+//   location: location // Replace with your desired location
+//   identity: {
+//     type: 'UserAssigned'
+//     userAssignedIdentities: {
+//       '${managedIdentity.name}' : {}
+//       //'${managedIdentity.id}' : {}
+//     }
+//   }
+//   properties: {
+//     azCliVersion: '2.52.0'
+//     primaryScriptUri: '${baseUrl}infra/scripts/run_python_create_tables_script.sh'
+//     arguments: myArguments
+//     retentionInterval: 'PT1H' // Specify the desired retention interval
+//     cleanupPreference:'OnSuccess'
+//   }
+// }
 
 
 /**************************************************************************/
