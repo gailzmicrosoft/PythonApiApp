@@ -584,7 +584,7 @@ resource createPostgreSqlTables 'Microsoft.Resources/deploymentScripts@2020-10-0
     }
   }
   properties: {
-    azCliVersion: '2.52.0' // '2.52.0'
+    azCliVersion: '2.52.0' // '2.52.0' has pip. 2.66.0 LTS Oct 2024 does not support pip anymore 
     primaryScriptUri: '${baseUrl}infra/scripts/python_create_tables_script.sh'
     arguments: arguments
     retentionInterval: 'PT1H' // Specify the desired retention interval
