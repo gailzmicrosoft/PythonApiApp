@@ -1,7 +1,6 @@
 # required for create_psql_tables.py
 psycopg2-binary==2.9.10
-msal==1.24.0b1               
-msal-extensions==1.0.0 
-azure-identity==1.19.0
-azure-keyvault-secrets==4.7.0
-    
+# msal==1.24.0b1               
+# msal-extensions==1.0.0 
+azure-identity==1.17.1
+azure-keyvault-secrets==4.5.0
