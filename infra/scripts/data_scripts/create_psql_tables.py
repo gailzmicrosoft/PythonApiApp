@@ -13,14 +13,19 @@ import sys
 # Retrieve secrets from Azure Key Vault
 ################################################################################################
 
-# Placeholder for Key Vault name
-key_vault_name = "key_vault_name_place_holder"
 
-# If you want to test the code loaclly: 
-postgresql_end_point  = "postgresql_end_point _place_holder"
-postgresql_admin_login  = "postgresql_admin_login _place_holder"
-mid_name = "mid_name_place_holder"
-postgresql_db_name = "postgresql_db_name_place_holder"
+key_vault_name = None
+
+# Below parameters will be retrieve from Key Vault 
+postgresql_end_point  = None
+postgresql_admin_login  = None
+mid_name = None
+postgresql_db_name = None
+
+
+# postgresql_admin_password = "YourValue" # Only used for local testing. 
+# key_vault_name = "yourKeyVaultNameOnly" # if test locally
+
 
 
 # Configure logging
@@ -121,14 +126,10 @@ try:
          postgresql_end_point, mid_name, postgresql_db_name, access_token.token
     )
 
-    # # Below can be used for local testing. Swap code with above code using azure identity. 
-    # postgresql_end_point = ''
-    # postgresql_admin_login = ''
-    # postgresql_admin_password = ''
-    # postgresql_db_name = 'postgres'
-    # # conn_string = "host={0} user={1} dbname={2} password={3} sslmode=require".format(
-    # #      postgresql_end_point, postgresql_admin_login, postgresql_db_name, postgresql_admin_password
-    # # )
+    # Below can be used for local testing. 
+    # conn_string = "host={0} user={1} dbname={2} password={3} sslmode=require".format(
+    #      postgresql_end_point, postgresql_admin_login, postgresql_db_name, postgresql_admin_password
+    # )
 
     conn = psycopg2.connect(conn_string)
     cursor = conn.cursor()
