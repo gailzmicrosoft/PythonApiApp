@@ -197,76 +197,76 @@ resource kvsApiKey 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
   }
 }
 
-/**************************************************************************/
-// create azure postgres database resources 
-/**************************************************************************/
-// postgres db is automatically created when the flexible server is created
-resource postgreSqlServer 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
-  name: postreSQLServerName
-  location: location
-  identity: {
-    type: 'SystemAssigned, UserAssigned' // Enable both System-Assigned and User-Assigned Managed Identities
-    userAssignedIdentities: {
-      '${managedIdentity.id}': {} // Reference the User-Assigned Managed Identity
-    }
-  }
-  sku: {
-    name: 'Standard_B4ms' // available SKUs: B1ms, B2ms, B4ms, B8ms, B16ms
-    tier: 'Burstable'
-  }
-  properties: {
-    version: '11' // 11, 12, 13, 14
-    administratorLogin: postgreServerAdminLogin
-    administratorLoginPassword: postgreServerAdminPassword // This should be stored in Key Vault
-    authConfig: {
-      tenantId: subscription().tenantId
-      activeDirectoryAuth: 'Enabled'
-      passwordAuth: 'Enabled'
-    }
-    highAvailability: {
-      mode: 'Disabled'
-    }
-    storage: {
-      storageSizeGB: 32
-    }
-    backup: {
-      backupRetentionDays: 7
-      geoRedundantBackup: 'Disabled'
-    }
-    network: {
-      publicNetworkAccess: 'Enabled'
-    }
-    availabilityZone: '1' // Not all tiers support it. set to '' for 'Standard_B1ms' may work
-  }
-}
+// /**************************************************************************/
+// // create azure postgres database resources 
+// /**************************************************************************/
+// // postgres db is automatically created when the flexible server is created
+// resource postgreSqlServer 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
+//   name: postreSQLServerName
+//   location: location
+//   identity: {
+//     type: 'SystemAssigned, UserAssigned' // Enable both System-Assigned and User-Assigned Managed Identities
+//     userAssignedIdentities: {
+//       '${managedIdentity.id}': {} // Reference the User-Assigned Managed Identity
+//     }
+//   }
+//   sku: {
+//     name: 'Standard_B4ms' // available SKUs: B1ms, B2ms, B4ms, B8ms, B16ms
+//     tier: 'Burstable'
+//   }
+//   properties: {
+//     version: '11' // 11, 12, 13, 14
+//     administratorLogin: postgreServerAdminLogin
+//     administratorLoginPassword: postgreServerAdminPassword // This should be stored in Key Vault
+//     authConfig: {
+//       tenantId: subscription().tenantId
+//       activeDirectoryAuth: 'Enabled'
+//       passwordAuth: 'Enabled'
+//     }
+//     highAvailability: {
+//       mode: 'Disabled'
+//     }
+//     storage: {
+//       storageSizeGB: 32
+//     }
+//     backup: {
+//       backupRetentionDays: 7
+//       geoRedundantBackup: 'Disabled'
+//     }
+//     network: {
+//       publicNetworkAccess: 'Enabled'
+//     }
+//     availabilityZone: '1' // Not all tiers support it. set to '' for 'Standard_B1ms' may work
+//   }
+// }
 
 
-resource waitForPostgreSqlServerScript 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
-  name: 'waitForPostgreSqlServerReady'
-  location: resourceGroup().location
-  kind: 'AzurePowerShell'
-  properties: {
-    azPowerShellVersion: '3.0'
-    scriptContent: 'start-sleep -Seconds 300'
-    cleanupPreference: 'Always'
-    retentionInterval: 'PT1H'
-  }
-  dependsOn: [
-    postgreSqlServer
-  ]
-}
+// resource waitForPostgreSqlServerScript 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
+//   name: 'waitForPostgreSqlServerReady'
+//   location: resourceGroup().location
+//   kind: 'AzurePowerShell'
+//   properties: {
+//     azPowerShellVersion: '3.0'
+//     scriptContent: 'start-sleep -Seconds 300'
+//     cleanupPreference: 'Always'
+//     retentionInterval: 'PT1H'
+//   }
+//   dependsOn: [
+//     postgreSqlServer
+//   ]
+// }
 
-resource postgresConfigurations 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2024-08-01' = {
-  name: 'azure.extensions'
-  parent: postgreSqlServer
-  properties: {
-    value: 'vector'
-    source: 'user-override'
-  }
-  dependsOn: [
-    waitForPostgreSqlServerScript
-  ]
-}
+// resource postgresConfigurations 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2024-08-01' = {
+//   name: 'azure.extensions'
+//   parent: postgreSqlServer
+//   properties: {
+//     value: 'vector'
+//     source: 'user-override'
+//   }
+//   dependsOn: [
+//     waitForPostgreSqlServerScript
+//   ]
+// }
 
 // This has not worked yet
 // resource azureADAdministrator 'Microsoft.DBforPostgreSQL/flexibleServers/administrators@2024-08-01' = {
@@ -328,238 +328,238 @@ resource kvsPostgreSqlAdminPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-0
 
 
 
-/**************************************************************************/
-// Azure Container Registry and Container Apps etc
-/**************************************************************************/
+// /**************************************************************************/
+// // Azure Container Registry and Container Apps etc
+// /**************************************************************************/
 
-resource acrResource 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
-  name: acrName
-  location: location
-  sku: {
-    name: 'Basic'
-  }
-  properties: {
-    adminUserEnabled: true
-  }
-}
+// resource acrResource 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
+//   name: acrName
+//   location: location
+//   sku: {
+//     name: 'Basic'
+//   }
+//   properties: {
+//     adminUserEnabled: true
+//   }
+// }
 
-/**************************************************************************/
-// Store ACR credentials in Key Vault
-/**************************************************************************/
+// /**************************************************************************/
+// // Store ACR credentials in Key Vault
+// /**************************************************************************/
 
-resource kvsAcrLoginServer 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
-  parent: keyVault
-  name: 'acr-login-server'
-  properties: {
-    value: acrResource.properties.loginServer
-  }
-}
-resource kvsAcrUsername 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
-  parent: keyVault
-  name: 'acr-username'
-  properties: {
-    value: acrName
-  }
-}
-resource kvsAcrPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
-  parent: keyVault
-  name: 'acr-password'
-  properties: {
-    value: acrResource.listCredentials().passwords[0].value
-  }
-}
-
-
-
-resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
-  name: '${resourcePrefix}LogAnalytics'
-  location: location
-  properties: {
-    retentionInDays: 30
-    sku: {
-      name: 'PerGB2018' 
-    }
-  }
-}
+// resource kvsAcrLoginServer 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+//   parent: keyVault
+//   name: 'acr-login-server'
+//   properties: {
+//     value: acrResource.properties.loginServer
+//   }
+// }
+// resource kvsAcrUsername 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+//   parent: keyVault
+//   name: 'acr-username'
+//   properties: {
+//     value: acrName
+//   }
+// }
+// resource kvsAcrPassword 'Microsoft.KeyVault/vaults/secrets@2022-11-01' = {
+//   parent: keyVault
+//   name: 'acr-password'
+//   properties: {
+//     value: acrResource.listCredentials().passwords[0].value
+//   }
+// }
 
 
-resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
-  name: '${resourcePrefix}AppInsights'
-  location: location
-  kind: 'web'
-  properties: {
-    Application_Type: 'web'
-    WorkspaceResourceId: logAnalytics.id
-  }
-}
 
-resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
-  name: '${resourcePrefix}ContainerAppsEnv'
-  location: location
-  properties: {
-    appLogsConfiguration: {
-      destination: 'log-analytics'
-      logAnalyticsConfiguration: {
-        customerId: logAnalytics.properties.customerId
-        sharedKey: logAnalytics.listKeys().primarySharedKey
-      }
-    }
-  }
-}
-
-var contextPath = 'https://github.com/gailzmicrosoft/PythonApiApp'
-var dockerFilePath = 'Dockerfile_root'
+// resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
+//   name: '${resourcePrefix}LogAnalytics'
+//   location: location
+//   properties: {
+//     retentionInDays: 30
+//     sku: {
+//       name: 'PerGB2018' 
+//     }
+//   }
+// }
 
 
-/**************************************************************************/
-// ACR Task to Build and Push Docker Image
-/**************************************************************************/
-resource acrTask 'Microsoft.ContainerRegistry/registries/tasks@2019-04-01' = {
-  parent: acrResource
-  name: 'buildAndPushTask'
-  location: location
-  properties: {
-    status: 'Enabled'
-    platform: {
-      os: 'Linux'
-      architecture: 'amd64'
-    }
-    agentConfiguration: {
-      cpu: 2
-    }
-    step: {
-      type: 'Docker'
-      contextPath: contextPath
-      dockerFilePath: dockerFilePath
-      imageNames: [
-        '${acrResource.name}.azurecr.io/${dockerImageName}:${dockerImageTag}'
-      ]
-      isPushEnabled: true
-    }
-  }
-}
+// resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
+//   name: '${resourcePrefix}AppInsights'
+//   location: location
+//   kind: 'web'
+//   properties: {
+//     Application_Type: 'web'
+//     WorkspaceResourceId: logAnalytics.id
+//   }
+// }
+
+// resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
+//   name: '${resourcePrefix}ContainerAppsEnv'
+//   location: location
+//   properties: {
+//     appLogsConfiguration: {
+//       destination: 'log-analytics'
+//       logAnalyticsConfiguration: {
+//         customerId: logAnalytics.properties.customerId
+//         sharedKey: logAnalytics.listKeys().primarySharedKey
+//       }
+//     }
+//   }
+// }
+
+// var contextPath = 'https://github.com/gailzmicrosoft/PythonApiApp'
+// var dockerFilePath = 'Dockerfile_root'
 
 
-resource acrTaskRun 'Microsoft.ContainerRegistry/registries/taskRuns@2019-06-01-preview' = {
-  parent: acrResource
-  name: 'buildAndPushTaskRun'
-  location: location
-  properties: {
-    runRequest: {
-      type: 'TaskRunRequest'
-      taskId: acrTask.id
-    }
-  }
-}
+// /**************************************************************************/
+// // ACR Task to Build and Push Docker Image
+// /**************************************************************************/
+// resource acrTask 'Microsoft.ContainerRegistry/registries/tasks@2019-04-01' = {
+//   parent: acrResource
+//   name: 'buildAndPushTask'
+//   location: location
+//   properties: {
+//     status: 'Enabled'
+//     platform: {
+//       os: 'Linux'
+//       architecture: 'amd64'
+//     }
+//     agentConfiguration: {
+//       cpu: 2
+//     }
+//     step: {
+//       type: 'Docker'
+//       contextPath: contextPath
+//       dockerFilePath: dockerFilePath
+//       imageNames: [
+//         '${acrResource.name}.azurecr.io/${dockerImageName}:${dockerImageTag}'
+//       ]
+//       isPushEnabled: true
+//     }
+//   }
+// }
 
 
-/**************************************************************************/
-// Some environment variables for the container app
-/**************************************************************************/
+// resource acrTaskRun 'Microsoft.ContainerRegistry/registries/taskRuns@2019-06-01-preview' = {
+//   parent: acrResource
+//   name: 'buildAndPushTaskRun'
+//   location: location
+//   properties: {
+//     runRequest: {
+//       type: 'TaskRunRequest'
+//       taskId: acrTask.id
+//     }
+//   }
+// }
 
-var appEnvironVars = [
-  {
-    name: 'KEY_VAULT_URI'
-    value: keyVault.properties.vaultUri
-  }
-  {
-    name: 'MID_NAME'
-    value: managedIdentity.name
-  }
-  {
-    name: 'MID_ID'
-    value: managedIdentity.id
-  }
-  {
-    name: 'AZURE_STORAGE_ACCOUNT_NAME'
-    value: storageAccount.name
-  }
-  {
-    name: 'POSTGRESQL_SERVER_NAME'
-    value: postreSQLServerName
-  }
-  {
-    name: 'POSTGRESQL_SERVER_HOST'
-    value: '${postreSQLServerName}.postgres.database.azure.com'
-  }
-  {
-    name: 'POSTGRESQL_DB_NAME'
-    value: 'postgres'
-  }
-  {
-    name: 'APPLICATIONINSIGHTS_INSTRUMENTATION_KEY'
-    value: applicationInsights.properties.ConnectionString
-  }
-]
 
-resource containerApps 'Microsoft.App/containerApps@2023-05-01' = {
-  name: '${resourcePrefix}cntrapp'
-  location: location
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${managedIdentity.id}' : {}
-    }
-  }
-  properties: {
-    environmentId: containerAppsEnvironment.id
-    configuration: {
-      secrets: [
-        {
-          name: 'keyvault-uri'
-          value: keyVault.properties.vaultUri
-        }
-        {
-          name: 'x-api-key'
-          value: kvsApiKey.properties.secretUriWithVersion
-        }
-      ]
-      ingress: {
-        external: true
-        targetPort: 8080
-        traffic: [
-          {
-            latestRevision: true
-            weight: 100
-          }
-        ]
-      }
-      registries: [
-        {
-          server: '${acrResource.name}.azurecr.io'
-          identity: managedIdentity.id
-        }
-      ]
-    }
-    template: {
-      revisionSuffix: 'v1-${deploymentTimestamp}' // Generate a unique revision suffix using the current timestamp
-      containers: [
-        {
-          name: dockerImageName
-          image: '${acrResource.name}.azurecr.io/${dockerImageName}:${dockerImageTag}'
-          env: appEnvironVars
-          resources: {
-            cpu: 1
-            memory: '2.0Gi'
-          }
-        }
-        // {
-        //   name: 'nginx'
-        //   image: 'docker.io/library/nginx:latest'
-        //   env: appEnvironVars
-        //   resources: {
-        //     cpu: 1
-        //     memory: '2.0Gi'
-        //   }
-        // }
+// /**************************************************************************/
+// // Some environment variables for the container app
+// /**************************************************************************/
 
-      ]
-    }
-  }
-  dependsOn: [
-    acrTaskRun // Ensure the container app waits for the ACR Task Run to complete
-  ]
-}
+// var appEnvironVars = [
+//   {
+//     name: 'KEY_VAULT_URI'
+//     value: keyVault.properties.vaultUri
+//   }
+//   {
+//     name: 'MID_NAME'
+//     value: managedIdentity.name
+//   }
+//   {
+//     name: 'MID_ID'
+//     value: managedIdentity.id
+//   }
+//   {
+//     name: 'AZURE_STORAGE_ACCOUNT_NAME'
+//     value: storageAccount.name
+//   }
+//   {
+//     name: 'POSTGRESQL_SERVER_NAME'
+//     value: postreSQLServerName
+//   }
+//   {
+//     name: 'POSTGRESQL_SERVER_HOST'
+//     value: '${postreSQLServerName}.postgres.database.azure.com'
+//   }
+//   {
+//     name: 'POSTGRESQL_DB_NAME'
+//     value: 'postgres'
+//   }
+//   {
+//     name: 'APPLICATIONINSIGHTS_INSTRUMENTATION_KEY'
+//     value: applicationInsights.properties.ConnectionString
+//   }
+// ]
+
+// resource containerApps 'Microsoft.App/containerApps@2023-05-01' = {
+//   name: '${resourcePrefix}cntrapp'
+//   location: location
+//   identity: {
+//     type: 'UserAssigned'
+//     userAssignedIdentities: {
+//       '${managedIdentity.id}' : {}
+//     }
+//   }
+//   properties: {
+//     environmentId: containerAppsEnvironment.id
+//     configuration: {
+//       secrets: [
+//         {
+//           name: 'keyvault-uri'
+//           value: keyVault.properties.vaultUri
+//         }
+//         {
+//           name: 'x-api-key'
+//           value: kvsApiKey.properties.secretUriWithVersion
+//         }
+//       ]
+//       ingress: {
+//         external: true
+//         targetPort: 8080
+//         traffic: [
+//           {
+//             latestRevision: true
+//             weight: 100
+//           }
+//         ]
+//       }
+//       registries: [
+//         {
+//           server: '${acrResource.name}.azurecr.io'
+//           identity: managedIdentity.id
+//         }
+//       ]
+//     }
+//     template: {
+//       revisionSuffix: 'v1-${deploymentTimestamp}' // Generate a unique revision suffix using the current timestamp
+//       containers: [
+//         {
+//           name: dockerImageName
+//           image: '${acrResource.name}.azurecr.io/${dockerImageName}:${dockerImageTag}'
+//           env: appEnvironVars
+//           resources: {
+//             cpu: 1
+//             memory: '2.0Gi'
+//           }
+//         }
+//         // {
+//         //   name: 'nginx'
+//         //   image: 'docker.io/library/nginx:latest'
+//         //   env: appEnvironVars
+//         //   resources: {
+//         //     cpu: 1
+//         //     memory: '2.0Gi'
+//         //   }
+//         // }
+
+//       ]
+//     }
+//   }
+//   dependsOn: [
+//     acrTaskRun // Ensure the container app waits for the ACR Task Run to complete
+//   ]
+// }
 
 
 
@@ -584,11 +584,10 @@ resource createPostgreSqlTables 'Microsoft.Resources/deploymentScripts@2020-10-0
     }
   }
   properties: {
-    azCliVersion: '2.68.0' // '2.52.0'
+    azCliVersion: '2.58.0' // '2.52.0'
     primaryScriptUri: '${baseUrl}infra/scripts/python_create_tables_script.sh'
     arguments: arguments
     retentionInterval: 'PT1H' // Specify the desired retention interval
     cleanupPreference:'OnSuccess'
   }
-  dependsOn:[postgreSqlServer]
 }
